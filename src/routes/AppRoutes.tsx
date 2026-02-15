@@ -37,6 +37,7 @@ import ActivityBudget from "../pages/ActivityBudget";
 import ActivityCost from "../pages/ActivityCost";
 import CommercialActivityPlanner from "../pages/ComercialActivityPlanner";
 import ManageRaci from "../pages/ManageRaci";
+import Dashboard from "../Components/Dashboard";
 
 const AppRoutes = () => {
     const isAuthenticated = !!localStorage.getItem("user");
@@ -223,10 +224,19 @@ const AppRoutes = () => {
                     />
 
                     <Route
-                        path="/dashboard"
+                        path="/project"
                         element={
                             <ProtectedRoute action="VIEW_NAVBAR_MENUS">
                                 <Projects />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/dashboard"
+                        element={
+                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                                <Dashboard />
                             </ProtectedRoute>
                         }
                     />

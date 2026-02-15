@@ -26,6 +26,7 @@ import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage.ts";
 import { useNavigate } from "react-router-dom";
 import PeopleSearch from "./PeopleSearch.tsx";
+import Charts from "./Charts.tsx";
 
 interface LocationDetails {
     state: string;
@@ -117,7 +118,7 @@ const Projects = () => {
     const tabs = [
         { key: "fdpp", label: "FDPP" },
         { key: "project-timeline", label: "Project Timeline" },
-        { key: "projectStatistics", label: "Project Statistics" },
+        { key: "projectStatistics", label: "Dashboard" },
         { key: "capex", label: "CAPEX-Performance" },
         { key: "documents", label: "Documents" },
         { key: "csr", label: "Corporate Social Responsibility" },
@@ -296,7 +297,8 @@ const Projects = () => {
     const renderTabContent = () => {
         switch (activeTab) {
             case "projectStatistics":
-                return <ProjectStatistics />;
+                // return <ProjectStatistics id={projectDetails.id} />;
+                return <Charts id={projectDetails.id} />
             case "fdpp":
                 return <FDPP code={projectDetails.id} />;
             case "project-timeline":

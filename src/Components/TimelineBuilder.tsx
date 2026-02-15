@@ -2603,6 +2603,7 @@ const TimeBuilder = () => {
                           placeholder="Project Mine Type"
                           disabled
                           className="tb-input-min"
+                          style={{padding:"2px 10px"}}
                         />
                       </div>
 

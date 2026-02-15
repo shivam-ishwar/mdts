@@ -1,5 +1,6 @@
 .project-container {
     display: flex;
+    overflow-x: hidden !important;
 }
 
 .pppsdd {
@@ -376,4 +377,9 @@
 
 .tab-active {
     outline: 1.5px solid rgba(31, 122, 99, 0.6);
+}
+.project-info {
+  width: 80%;
+  margin: 10px;
+  min-width: 0; /* VERY IMPORTANT in flex layouts */
 }

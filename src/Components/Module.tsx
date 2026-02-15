@@ -1007,14 +1007,143 @@ const Module = () => {
         );
     };
 
+    const [openBulkImport, setOpenBulkImport] = useState(false);
+    const [bulkJson, setBulkJson] = useState("");
+    const [bulkResult, setBulkResult] = useState<{ ok: number; skipped: number; failed: number } | null>(null);
+
+    const normalizeBulk = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
+    const ensureArray = (v: any) => (Array.isArray(v) ? v : v ? [v] : []);
+
+    const safeJsonParse = (text: string) => {
+        const t = (text || "").trim();
+        if (!t) return null;
+        return JSON.parse(t);
+    };
+
+    const sanitizeModuleForSave = (m: any) => {
+        const now = new Date().toISOString();
+        const moduleNameVal = String(m?.moduleName ?? m?.name ?? "").trim();
+        const mineTypeVal = String(m?.mineType ?? m?.type ?? selectedOption ?? "").trim();
+        const parentCodeVal = String(m?.parentModuleCode ?? m?.moduleCode ?? m?.code ?? "").trim();
+
+        const activities = ensureArray(m?.activities ?? m?.moduleActivities ?? []).map((a: any, idx: number) => {
+            const code = String(a?.code ?? a?.activityCode ?? "").trim();
+            const activityName = String(a?.activityName ?? a?.name ?? a?.title ?? "").trim() || `Activity ${idx + 1}`;
+            const duration = Number(a?.duration ?? a?.durationDays ?? 1) || 1;
+            const level = String(a?.level ?? "L2");
+            const prerequisite = String(a?.prerequisite ?? a?.prerequisites ?? "").trim();
+
+            return {
+                code: code || `${parentCodeVal || "MD"}/${(idx + 1) * 10}`,
+                activityName,
+                duration,
+                level: level.startsWith("L") ? level : `L${level}`,
+                prerequisite,
+                guicode: a?.guicode ?? uuidv4(),
+                raci: a?.raci,
+                notifications: a?.notifications,
+                documents: a?.documents,
+                cost: a?.cost
+            };
+        });
+
+        return {
+            guiId: m?.guiId ?? uuidv4(),
+            parentModuleCode: parentCodeVal || generateTwoLetterAcronym(moduleNameVal, existingAcronyms),
+            moduleName: moduleNameVal,
+            level: String(m?.level ?? "L1"),
+            mineType: mineTypeVal,
+            duration: m?.duration ?? "",
+            activities,
+            userGuiId: m?.userGuiId ?? currentUser?.guiId,
+            orgId: m?.orgId ?? currentUser?.orgId,
+            createdAt: m?.createdAt ?? now,
+            moduleType: m?.moduleType ?? moduleType
+        };
+    };
+
+    const isDupForBulk = (m: any, existing: any[]) => {
+        const n = normalizeBulk(m.moduleName);
+        return existing.some((x: any) =>
+            normalizeBulk(x?.moduleName) === n &&
+            String(x?.mineType ?? "") === String(m.mineType ?? "") &&
+            String(x?.orgId ?? "") === String(m.orgId ?? "")
+        );
+    };
+
+    const handleBulkImportSave = async () => {
+        try {
+            if (!currentUser?.orgId) {
+                notify.error("User/org not loaded");
+                return;
+            }
+
+            const parsed = safeJsonParse(bulkJson);
+            if (!parsed) {
+                notify.error("Paste valid JSON");
+                return;
+            }
+
+            const rawModules = ensureArray(parsed);
+
+            const existing = await db.getModules();
+            const scopedExisting = (existing || []).filter((x: any) => String(x?.orgId ?? "") === String(currentUser.orgId));
+
+            let ok = 0;
+            let skipped = 0;
+            let failed = 0;
+
+            const toInsert: any[] = [];
+
+            for (const raw of rawModules) {
+                try {
+                    const mod = sanitizeModuleForSave(raw);
+
+                    if (!mod.moduleName || !mod.mineType) {
+                        failed += 1;
+                        continue;
+                    }
+
+                    if (isDupForBulk(mod, scopedExisting) || isDupForBulk(mod, toInsert)) {
+                        skipped += 1;
+                        continue;
+                    }
+
+                    toInsert.push(mod);
+                    ok += 1;
+                } catch {
+                    failed += 1;
+                }
+            }
+
+            if (!toInsert.length) {
+                setBulkResult({ ok: 0, skipped, failed });
+                notify.warning("Nothing to import");
+                return;
+            }
+
+            await db.modules.bulkAdd(toInsert);
+
+            setBulkResult({ ok, skipped, failed });
+            notify.success(`Imported ${ok} module(s). Skipped ${skipped}. Failed ${failed}.`);
+
+            const mods = await db.getModules();
+            setAllModules(mods.filter((mod: any) => mod.orgId == currentUser.orgId));
+        } catch (e: any) {
+            notify.error(e?.message || "Bulk import failed");
+        }
+    };
+
+
     return (
         <div>
             <div className="module-main">
                 <div className="top-item" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div className="module-title" style={{ display: "flex", justifyContent: "space-between", gap: "100px", alignItems: "center" }}>
+                    <div className="module-title" style={{ display: "flex", justifyContent: "space-between", gap: "50px", alignItems: "center" }}>
                         <div>
-                        <p className="page-heading-title">Modules</p>
-                        <span className="pl-subtitle">Manage your org projects and ownership</span>
+                            <p className="page-heading-title">Modules</p>
+                            <span className="pl-subtitle">Manage your org projects and ownership</span>
                         </div>
                         <div className="searching-and-create">
                             <Input
@@ -1189,18 +1318,36 @@ const Module = () => {
                                     </Col>
 
                                     {hasPermission(currentUser?.role, "CREATE_NEW_Module") && !moduleData.parentModuleCode && (
-                                        <Col>
-                                            <Tooltip title="Create New Module">
-                                                <Button
-                                                    type="primary"
-                                                    onClick={() => handleCreateNewModule()}
-                                                    className="add-module-button"
-                                                    style={{ height: "30px", fontSize: "14px" }}
-                                                >
-                                                    Create New Module
-                                                </Button>
-                                            </Tooltip>
-                                        </Col>
+                                        <>
+                                            <Col>
+                                                <Tooltip title="Create New Module">
+                                                    <Button
+                                                        type="primary"
+                                                        onClick={() => handleCreateNewModule()}
+                                                        className="add-module-button"
+                                                        style={{ height: "30px", fontSize: "14px" }}
+                                                    >
+                                                        Create New Module
+                                                    </Button>
+                                                </Tooltip>
+                                            </Col>
+                                            <Col style={{display:"none"}}>
+                                                <Tooltip title="Bulk Import Modules (JSON)">
+                                                    <Button
+                                                        type="primary"
+                                                        onClick={() => {
+                                                            setOpenBulkImport(true);
+                                                            setBulkResult(null);
+                                                            setBulkJson("");
+                                                        }}
+                                                        className="add-module-button"
+                                                        style={{ height: "30px", fontSize: "14px" }}
+                                                    >
+                                                        Import
+                                                    </Button>
+                                                </Tooltip>
+                                            </Col>
+                                        </>
                                     )}
 
                                     {isEditing && (
@@ -2008,6 +2155,51 @@ const Module = () => {
                         </Form.List>
                     </Form>
                 </Modal>
+
+                <Modal
+                    title="Bulk Import Modules (Paste JSON)"
+                    open={openBulkImport}
+                    onCancel={() => setOpenBulkImport(false)}
+                    onOk={handleBulkImportSave}
+                    okText="Import & Save"
+                    cancelText="Cancel"
+                    okButtonProps={{ className: "bg-secondary" }}
+                    cancelButtonProps={{ className: "bg-tertiary" }}
+                    maskClosable={false}
+                    keyboard={false}
+                    width={"70%"}
+                    className="modal-container"
+                >
+                    <div style={{ padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
+                        <div style={{ fontSize: 12, opacity: 0.75 }}>
+                            Paste an array of modules or a single module object. Fields supported: moduleName, mineType, parentModuleCode, activities[].
+                        </div>
+
+                        <Input.TextArea
+                            value={bulkJson}
+                            onChange={(e) => setBulkJson(e.target.value)}
+                            placeholder={`[
+                                       {
+                                         "moduleName": "Site Setup & Mobilization",
+                                         "mineType": "OC",
+                                         "parentModuleCode": "SS",
+                                         "activities": [
+                                           { "code": "SS/10", "activityName": "Kickoff", "duration": 3, "level": "L2", "prerequisite": "" }
+                                         ]
+                                       }
+                                      `}
+                            rows={14}
+                            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+                        />
+
+                        {bulkResult && (
+                            <div style={{ fontSize: 12 }}>
+                                Imported: <b>{bulkResult.ok}</b> • Skipped (duplicates): <b>{bulkResult.skipped}</b> • Failed: <b>{bulkResult.failed}</b>
+                            </div>
+                        )}
+                    </div>
+                </Modal>
+
 
             </div>
             <ToastContainer />

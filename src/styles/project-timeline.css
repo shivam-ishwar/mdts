@@ -30,6 +30,19 @@
     margin: 10px 0;
 }
 
+.custom-dropdown{
+    background-color: #fff;
+    padding: 10px 20px;
+
+    .main-filter-containers{
+        margin-bottom: 10px;
+    }
+
+    p{
+        margin-top: 10px;
+        margin-bottom: 5px !important;
+    }
+}
 .project-timeline-main .project-timeline-status-toolbar {
     display: flex;
     justify-content: space-between;
@@ -40,6 +53,7 @@
     border-radius: var(--pt-radius-lg);
     background: var(--pt-surface);
     box-shadow: var(--pt-shadow);
+    width: 60.9%;
 }
 
 .project-timeline-main .project-timeline-status-toolbar .project-timeline-select-item {
@@ -597,4 +611,10 @@
     width: 100%;
     max-width: 100%;
   }
+}
+
+.project-timeline-table-scroll {
+  max-width: 60.9%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }

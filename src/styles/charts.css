@@ -1,0 +1,399 @@
+:root {
+  --bg: #f6f7fb;
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel2: rgba(255, 255, 255, 0.72);
+  --border: rgba(15, 23, 42, 0.10);
+  --text: rgba(15, 23, 42, 0.92);
+  --muted: rgba(15, 23, 42, 0.62);
+  --muted2: rgba(15, 23, 42, 0.48);
+  --shadow: 0 22px 70px rgba(15, 23, 42, 0.10);
+  --shadow2: 0 10px 32px rgba(15, 23, 42, 0.08);
+
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --blue: #0ea5e9;
+  --slate: #64748b;
+
+  --radius: 18px;
+  --radius-sm: 14px;
+}
+
+.chartsPage {
+  min-height: 100vh;
+  padding: 18px;
+  color: var(--text);
+  background:
+    radial-gradient(1100px 520px at 12% -10%, rgba(14, 165, 233, 0.18), transparent 60%),
+    radial-gradient(900px 520px at 90% 0%, rgba(34, 197, 94, 0.14), transparent 58%),
+    radial-gradient(900px 520px at 60% 110%, rgba(245, 158, 11, 0.14), transparent 58%),
+    linear-gradient(180deg, #f8fafc 0%, #f6f7fb 45%, #f8fafc 100%);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+}
+
+.panel {
+  margin-top: 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82));
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.panelHeader {
+  padding: 18px 18px 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(180deg, rgba(2, 132, 199, 0.06), transparent);
+}
+
+.panelTitle {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.15px;
+  line-height: 1.1;
+}
+
+.panelSubTitle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.15px;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.filterLabel {
+  font-size: 11px;
+  color: var(--muted2);
+  letter-spacing: 0.18px;
+  text-transform: uppercase;
+}
+
+.select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  color: var(--text);
+  outline: none;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  appearance: none;
+}
+
+.select:focus {
+  border-color: rgba(14, 165, 233, 0.55);
+  box-shadow: 0 12px 26px rgba(14, 165, 233, 0.14);
+  transform: translateY(-1px);
+}
+
+.topStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.84));
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: var(--shadow2);
+  padding: 14px 14px 12px 14px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.statCard::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background:
+    radial-gradient(420px 140px at 18% -20%, rgba(14, 165, 233, 0.12), transparent 62%),
+    radial-gradient(340px 120px at 86% -20%, rgba(245, 158, 11, 0.12), transparent 62%),
+    radial-gradient(340px 120px at 50% 120%, rgba(34, 197, 94, 0.10), transparent 62%);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.statCard>* {
+  position: relative;
+  z-index: 1;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.10);
+}
+
+.statLabel {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.15px;
+}
+
+.statValue {
+  margin-top: 8px;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.4px;
+}
+
+.statSuffix {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.statHint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tagRow {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.75);
+  color: rgba(15, 23, 42, 0.86);
+}
+
+.tagGreen {
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.tagRed {
+  border-color: rgba(239, 68, 68, 0.30);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.tagGray {
+  border-color: rgba(148, 163, 184, 0.40);
+  background: rgba(148, 163, 184, 0.16);
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.spacer {
+  height: 14px;
+}
+
+.panelSection {
+  padding: 16px 18px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.sectionGrid {
+  display: grid;
+  grid-template-columns: 1.05fr 1.6fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.sectionLeft {
+  padding: 6px 4px;
+}
+
+.sectionRight {
+  padding: 4px 0;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 850;
+  letter-spacing: 0.1px;
+}
+
+.sectionSub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.miniStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.miniCard {
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
+}
+
+.miniLabel {
+  font-size: 11px;
+  color: var(--muted2);
+  letter-spacing: 0.18px;
+  text-transform: uppercase;
+}
+
+.miniValue {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+}
+
+.chartWrap {
+  border-radius: var(--radius);
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+  padding: 10px 12px;
+}
+
+.emptyState {
+  padding: 18px;
+  margin: 14px 18px 18px 18px;
+  border-radius: var(--radius);
+  border: 1px dashed rgba(15, 23, 42, 0.22);
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(15, 23, 42, 0.66);
+  font-size: 13px;
+}
+
+.tooltipCard {
+  min-width: 280px;
+  border-radius: 14px;
+  padding: 12px 12px 10px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.14);
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.tooltipTitle {
+  font-weight: 900;
+  letter-spacing: 0.12px;
+  font-size: 13px;
+}
+
+.tooltipSub {
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.tooltipRow {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.86);
+}
+
+.tooltipRow span:first-child {
+  color: rgba(15, 23, 42, 0.58);
+}
+
+.recharts-wrapper,
+.recharts-surface {
+  outline: none;
+}
+
+.recharts-text {
+  fill: rgba(15, 23, 42, 0.72) !important;
+}
+
+.recharts-cartesian-grid line,
+.recharts-cartesian-grid path {
+  stroke: rgba(15, 23, 42, 0.10) !important;
+}
+
+.recharts-cartesian-axis line,
+.recharts-cartesian-axis-tick-line {
+  stroke: rgba(15, 23, 42, 0.18) !important;
+}
+
+.recharts-default-legend {
+  padding-top: 4px !important;
+}
+
+.recharts-legend-item-text {
+  color: rgba(15, 23, 42, 0.72) !important;
+}
+
+.recharts-tooltip-cursor {
+  fill: rgba(2, 132, 199, 0.06) !important;
+}
+
+@media (max-width: 1200px) {
+  .topStatsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filterItem {
+    min-width: 200px;
+  }
+
+  .sectionGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .chartsPage {
+    padding: 12px;
+  }
+
+  .panelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters {
+    width: 100%;
+  }
+
+  .filterItem {
+    min-width: 100%;
+  }
+
+  .statValue {
+    font-size: 26px;
+  }
+}

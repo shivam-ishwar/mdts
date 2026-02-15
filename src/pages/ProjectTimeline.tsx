@@ -443,7 +443,7 @@ const ProjectTimeline = (project: any) => {
             title: "Key Activity",
             dataIndex: "keyActivity",
             key: "keyActivity",
-            width: 250,
+            width: 350,
             align: "left",
             render: (_, record) => {
                 const {
@@ -501,14 +501,14 @@ const ProjectTimeline = (project: any) => {
             title: "Duration",
             dataIndex: "duration",
             key: "duration",
-            width: 80,
+            width: 100,
             align: "center",
             render: (_, record) => `${record.duration ? record.duration : ''}`
         },
-        { title: "Pre-Requisite", dataIndex: "preRequisite", key: "preRequisite", width: 120, align: "center" },
-        { title: "Slack", dataIndex: "slack", key: "slack", width: 80, align: "center" },
-        { title: "Planned Start", dataIndex: "plannedStart", key: "plannedStart", width: 120, align: "center" },
-        { title: "Planned Finish", dataIndex: "plannedFinish", key: "plannedFinish", width: 120, align: "center" },
+        { title: "Pre-Requisite", dataIndex: "preRequisite", key: "preRequisite", width: 220, align: "center" },
+        { title: "Slack", dataIndex: "slack", key: "slack", width: 180, align: "center" },
+        { title: "Planned Start", dataIndex: "plannedStart", key: "plannedStart", width: 180, align: "center" },
+        { title: "Planned Finish", dataIndex: "plannedFinish", key: "plannedFinish", width: 180, align: "center" },
     ];
 
     function getBusinessDays(start: dayjs.Dayjs, end: dayjs.Dayjs): number {
@@ -543,7 +543,7 @@ const ProjectTimeline = (project: any) => {
         {
             title: "Actual/Expected Duration",
             key: "durations",
-            width: 200,
+            width: 250,
             align: "center",
             render: (_, record) => {
                 const { actualStart, actualFinish, duration } = record;
@@ -1006,8 +1006,8 @@ const ProjectTimeline = (project: any) => {
                         <hr />
 
                         <div className="project-timeline-status-update-item">
-                            <div className="project-timeline-table-container">
-                                <Table
+                            <div className="project-timeline-table-scroll">
+                                {/* <Table
                                     columns={finalColumns}
                                     dataSource={filteredDataSource}
                                     className="project-timeline-table"
@@ -1023,10 +1023,33 @@ const ProjectTimeline = (project: any) => {
                                         },
                                         expandIconColumnIndex: 0,
                                     }}
+                                    scroll={{ x: "max-content" }}
                                     rowClassName={(record) => (record.isModule ? "module-header" : "activity-row")}
                                     bordered
                                     
+                                /> */}
+                                <Table
+                                    columns={finalColumns}
+                                    dataSource={filteredDataSource}
+                                    className="project-timeline-table"
+                                    pagination={false}
+                                    scroll={{ x: 1000 }}
+                                    tableLayout="fixed"
+                                    expandable={{
+                                        expandedRowRender: () => null,
+                                        rowExpandable: (record) => record.children?.length > 0,
+                                        expandedRowKeys: expandedKeys,
+                                        onExpand: (expanded, record) => {
+                                            setExpandedKeys(
+                                                expanded ? [...expandedKeys, record.key] : expandedKeys.filter((key: any) => key !== record.key)
+                                            );
+                                        },
+                                        expandIconColumnIndex: 0,
+                                    }}
+                                    rowClassName={(record) => (record.isModule ? "module-header" : "activity-row")}
+                                    bordered
                                 />
+
                             </div>
                         </div>
                     </>

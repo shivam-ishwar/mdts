@@ -18,7 +18,8 @@ interface NavItem {
 }
 
 const initialNavLinks: any[] = [
-    { label: "Dashboard", action: "/dashboard", requiredPermission: "VIEW_NAVBAR_MENUS" },
+    // { label: "Dashboard", action: "/dashboard", requiredPermission: "VIEW_NAVBAR_MENUS" },
+    { label: "Project", action: "/project", requiredPermission: "VIEW_NAVBAR_MENUS" },
     { label: "Knowledge Center", action: "/knowledge-center", requiredPermission: "VIEW_NAVBAR_MENUS" },
     {
         label: "Data Master",

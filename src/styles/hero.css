@@ -13,7 +13,7 @@
   width: 100%;
   height: clamp(520px, 60vh, 680px);
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  /* border-radius: var(--radius-lg); */
 }
 
 .carousel-slide {
