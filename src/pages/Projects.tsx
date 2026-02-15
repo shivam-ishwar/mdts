@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "../styles/projects.css";
 import { Input, Button, Modal, Select, Dropdown, Menu } from "antd";
 import { Link } from "react-router-dom";
@@ -20,7 +20,6 @@ import TimelinePerformance from "./TimelinePerformance.tsx";
 import CSR from "./CSR.tsx";
 import ProjectTimeline from "./ProjectTimeline.tsx";
 import ProjectDocs from "./ProjectDocs";
-import ProjectStatistics from "./ProjectStatistics.tsx";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage.ts";
@@ -97,6 +96,7 @@ type RightPanelView = "project" | "people";
 
 const Projects = () => {
     const [allProjects, setAllProjects] = useState<any[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
     const [projectDetails, setProjectDetails] = useState<ProjectData | any>(null);
     const [selectedProjectName, setSelectedProjectName] = useState<string>("");
 
@@ -118,7 +118,7 @@ const Projects = () => {
     const tabs = [
         { key: "fdpp", label: "FDPP" },
         { key: "project-timeline", label: "Project Timeline" },
-        { key: "projectStatistics", label: "Dashboard" },
+        { key: "projectStatistics", label: "Project Statistics" },
         { key: "capex", label: "CAPEX-Performance" },
         { key: "documents", label: "Documents" },
         { key: "csr", label: "Corporate Social Responsibility" },
@@ -126,6 +126,59 @@ const Projects = () => {
     ];
 
     const [activeTab, setActiveTab] = useState("fdpp");
+
+    const toArray = (v: any): string[] => {
+        if (v == null || v === "") return [];
+        if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
+        return [String(v).trim()].filter(Boolean);
+    };
+
+    const deriveMemberCountFromTimeline = (timelineData: any): number => {
+        const modules = Array.isArray(timelineData) ? timelineData : [];
+        const ids = new Set<string>();
+
+        modules.forEach((module: any) => {
+            (module?.activities || []).forEach((activity: any) => {
+                const raci = activity?.raci || activity?.rasi || activity?.RACI || activity?.RASI || {};
+                [
+                    ...toArray(raci?.responsible),
+                    ...toArray(raci?.accountable),
+                    ...toArray(raci?.consulted),
+                    ...toArray(raci?.informed),
+                ].forEach((id) => ids.add(id));
+            });
+        });
+
+        return ids.size;
+    };
+
+    const deriveDisplayStatus = (project: any) => {
+        const explicit = String(project?.status || "").trim();
+        if (explicit) return explicit;
+        const hasTimeline = Array.isArray(project?.projectTimeline) && project.projectTimeline.length > 0;
+        return hasTimeline ? "Tracking" : "Planning";
+    };
+
+    const getProjectInfoText = (project: any) => {
+        const customDescription = String(project?.projectParameters?.description || "").trim();
+        if (customDescription) return customDescription;
+
+        const params = project?.projectParameters || {};
+        const mineral = String(params?.mineral || "").trim();
+        const mineType = String(params?.typeOfMine || "").trim();
+        const state = String(params?.state || "").trim();
+        const district = String(params?.district || "").trim();
+        const startDate = String(project?.startDate || "").trim();
+        const endDate = String(project?.endDate || "").trim();
+
+        const parts: string[] = [];
+        if (mineral) parts.push(`${mineral} project`);
+        if (mineType) parts.push(mineType);
+        if (state || district) parts.push([district, state].filter(Boolean).join(", "));
+        if (startDate || endDate) parts.push([startDate || "Start TBD", endDate || "End TBD"].join(" -> "));
+
+        return parts.length ? parts.join(" • ") : "Project profile configured. Add timeline data to unlock detailed insights.";
+    };
 
     const getAllProjects = async () => {
         if (!currentUser) return;
@@ -141,9 +194,35 @@ const Projects = () => {
                 return;
             }
 
-            setAllProjects(orgProjects);
-            setProjectDetails(orgProjects[0]);
-            setSelectedProjectName(orgProjects[0].projectParameters.projectName);
+            const latestVersion = localStorage.getItem("latestProjectVersion");
+            const enrichedProjects = await Promise.all(
+                orgProjects.map(async (project: any) => {
+                    let memberCount = Array.isArray(project?.members) ? project.members.length : 0;
+
+                    try {
+                        const versions = Array.isArray(project?.projectTimeline) ? project.projectTimeline : [];
+                        const selectedTimeline =
+                            (latestVersion ? versions.find((v: any) => String(v?.version) === String(latestVersion)) : null) ||
+                            versions[versions.length - 1] ||
+                            versions[0];
+
+                        if (selectedTimeline?.timelineId) {
+                            const timelineData = await db.getProjectTimelineById(selectedTimeline.timelineId);
+                            const raciCount = deriveMemberCountFromTimeline(timelineData);
+                            if (raciCount > 0) memberCount = raciCount;
+                        }
+                    } catch (err) {
+                        console.error(`Failed to derive member count for project ${project?.id}:`, err);
+                    }
+
+                    const displayStatus = deriveDisplayStatus(project);
+                    return { ...project, memberCount, displayStatus };
+                })
+            );
+
+            setAllProjects(enrichedProjects);
+            setProjectDetails(enrichedProjects[0]);
+            setSelectedProjectName(enrichedProjects[0].projectParameters.projectName);
             setIsProjectFocused(true);
         } catch (error) {
             console.error("An unexpected error occurred while fetching projects:", error);
@@ -159,6 +238,35 @@ const Projects = () => {
             getAllProjects();
         }
     }, [currentUser]);
+
+    const filteredProjects = useMemo(() => {
+        const normalized = searchTerm.trim().toLowerCase();
+        if (!normalized) return allProjects;
+
+        return allProjects.filter((project) => {
+            const params = project?.projectParameters || {};
+            const searchable = [
+                params?.projectName,
+                params?.companyName,
+                params?.description,
+                params?.mineral,
+                params?.typeOfMine,
+                params?.state,
+                params?.district,
+                project?.id,
+                project?.startDate,
+                project?.endDate,
+                project?.displayStatus,
+                project?.status,
+                getProjectInfoText(project),
+                String(project?.memberCount ?? project?.members?.length ?? ""),
+            ]
+                .filter(Boolean)
+                .map((v) => String(v).toLowerCase());
+
+            return searchable.some((value) => value.includes(normalized));
+        });
+    }, [allProjects, searchTerm]);
 
     if (!projectDetails) {
         return (
@@ -192,8 +300,8 @@ const Projects = () => {
         }
     };
 
-    const handleSearch = (_event: any) => {
-        console.log("searching...");
+    const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(event.target.value || "");
     };
 
     const handleAddMember = () => {
@@ -360,13 +468,24 @@ const Projects = () => {
                             <Input
                                 size="small"
                                 placeholder={isPeopleView ? "Projects (view only)..." : "Find the projects..."}
+                                value={searchTerm}
                                 onChange={handleSearch}
                                 prefix={<SearchOutlined style={{ fontSize: "18px", color: "#ddd" }} />}
                                 style={{ height: "26px", fontSize: "12px" }}
                             />
                         </div>
 
-                        {allProjects.map((project) => {
+                        {filteredProjects.length === 0 ? (
+                            <div className="projects-empty-state">
+                                <div className="projects-empty-title">No matching projects found</div>
+                                <div className="projects-empty-subtitle">
+                                    {searchTerm.trim()
+                                        ? `No results for "${searchTerm.trim()}". Try project name, location, mineral, status, or member count.`
+                                        : "No project records available for the selected view."}
+                                </div>
+                            </div>
+                        ) : (
+                            filteredProjects.map((project) => {
                             const isSelected = selectedProjectName === project.projectParameters.projectName;
 
                             return (
@@ -380,7 +499,7 @@ const Projects = () => {
                                     <div className="project-info-block">
                                         <div className="project-title">{project.projectParameters.projectName}</div>
                                         <div className="project-meta">
-                                            <span className="desc">{project.projectParameters.description || "No description available."}</span>
+                                            <span className="desc">{getProjectInfoText(project)}</span>
 
                                             <div className="date-range">
                                                 <span className="date-label">📅</span>
@@ -390,9 +509,9 @@ const Projects = () => {
                                             </div>
 
                                             <div className="meta-row">
-                                                <span className="meta-item">👥 {project.members?.length || 0} members</span>
-                                                <span className={`status-badge ${project.status === "Active" ? "active" : "inactive"}`}>
-                                                    {project.status || "Unknown"}
+                                                <span className="meta-item">👥 {project.memberCount ?? project.members?.length ?? 0} members</span>
+                                                <span className={`status-badge ${project.displayStatus === "Active" || project.displayStatus === "Tracking" ? "active" : "inactive"}`}>
+                                                    {project.displayStatus || "Planning"}
                                                 </span>
                                             </div>
                                         </div>
@@ -405,7 +524,8 @@ const Projects = () => {
                                     )}
                                 </div>
                             );
-                        })}
+                            })
+                        )}
                     </div>
                     <div className="create-project-btn-div">
                         <div style={{ display: "flex", justifyContent: "center" }} onClick={() => navigate("/create/register-new-project")} >

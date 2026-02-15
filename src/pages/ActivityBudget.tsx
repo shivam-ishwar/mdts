@@ -1041,7 +1041,7 @@ const ActivityBudget: React.FC = () => {
       <div className="budget-heading budget-heading--top">
         <div className="budget-heading-left">
           <p className="page-heading-title">Activity Budget</p>
-            <span className="pl-subtitle">Manage your org projects and ownership</span>
+            <span className="pl-subtitle">Set and revise activity budgets module-wise</span>
         </div>
 
         <div className="budget-heading-right">

@@ -11,6 +11,74 @@ import "react-phone-input-2/lib/style.css";
 import { GoogleOutlined, AppleOutlined, EyeInvisibleOutlined, EyeOutlined } from "@ant-design/icons";
 
 const { Option } = Select;
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+const ZIP_REGEX = /^(\d{6}|\d{5}(-\d{4})?)$/;
+
+const normalizeTaxId = (value?: string) => (value || "").toUpperCase().replace(/\s+/g, "").trim();
+
+const sanitizePanInput = (value?: string) => {
+    const cleaned = (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+    let output = "";
+    for (const ch of cleaned) {
+        const idx = output.length;
+        const needsLetter = idx < 5 || idx === 9;
+        const needsDigit = idx >= 5 && idx <= 8;
+        if (needsLetter && /[A-Z]/.test(ch)) output += ch;
+        if (needsDigit && /[0-9]/.test(ch)) output += ch;
+        if (output.length === 10) break;
+    }
+    return output;
+};
+
+const sanitizeGstinInput = (value?: string) => {
+    const cleaned = (value || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15);
+    const rules = [
+        /[0-9]/, /[0-9]/,
+        /[A-Z]/, /[A-Z]/, /[A-Z]/, /[A-Z]/, /[A-Z]/,
+        /[0-9]/, /[0-9]/, /[0-9]/, /[0-9]/,
+        /[A-Z]/,
+        /[1-9A-Z]/,
+        /Z/,
+        /[0-9A-Z]/,
+    ];
+    let output = "";
+    for (const ch of cleaned) {
+        const idx = output.length;
+        if (idx >= rules.length) break;
+        if (rules[idx].test(ch)) output += ch;
+    }
+    return output;
+};
+
+const sanitizeZipInput = (value?: string) => {
+    const cleaned = (value || "").replace(/[^\d-]/g, "").slice(0, 10);
+    const firstHyphenIndex = cleaned.indexOf("-");
+    if (firstHyphenIndex === -1) return cleaned;
+    const before = cleaned.slice(0, firstHyphenIndex).replace(/-/g, "");
+    const after = cleaned.slice(firstHyphenIndex + 1).replace(/-/g, "");
+    return `${before}-${after}`;
+};
+
+const normalizeWebsiteUrl = (value?: string) => {
+    const raw = String(value ?? "")
+        .replace(/[\u200B-\u200D\uFEFF]/g, "")
+        .trim()
+        .replace(/\s+/g, "");
+    if (!raw) return null;
+
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    try {
+        const url = new URL(normalized);
+        const isHttp = url.protocol === "http:" || url.protocol === "https:";
+        const hasValidDomain = url.hostname.includes(".") && !/\s/.test(url.hostname);
+        return isHttp && hasValidDomain ? url.toString() : null;
+    } catch {
+        const fallback = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}([/?#].*)?$/i.test(raw);
+        if (!fallback) return null;
+        return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    }
+};
 
 const TermsAndConditionsContent: React.FC = () => (
     <div>
@@ -75,7 +143,7 @@ const SignInSignUp: React.FC = () => {
     const [form] = Form.useForm();
 
     const stepFieldNames = [
-        ["company", "industry", "website", "gstin", "cin", "incorpDate", "employeeCount"],
+        ["company", "companyType", "industry", "website", "pan", "gstin", "cin", "incorpDate", "employeeCount"],
         ["country", "state", "city", "address1", "zip"],
         ["name", "designation", "email", "mobile", "password", "confirmPassword"],
     ];
@@ -89,33 +157,91 @@ const SignInSignUp: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        if (currentStep !== 2) return;
+
+        const names = stepFieldNames[2];
+        const t = setTimeout(() => {
+            form.setFields(
+                names.map((name) => ({
+                    name,
+                    touched: false,
+                    validating: false,
+                    errors: [],
+                    warnings: [],
+                }))
+            );
+        }, 0);
+
+        return () => clearTimeout(t);
+    }, [currentStep, form]);
+
+
     const handlePrev = () => setCurrentStep((prev) => prev - 1);
 
     const handleFinish = async (values: any) => {
         try {
-            const orgId = uuidv4();
+            const allValues = { ...form.getFieldsValue(true), ...values };
+            const websiteValue = allValues.website ?? form.getFieldValue("website");
+            const normalizedPan = normalizeTaxId(allValues.pan);
+            const normalizedGstin = normalizeTaxId(allValues.gstin);
+            const normalizedWebsite = normalizeWebsiteUrl(websiteValue);
+
+            if (normalizedPan && !PAN_REGEX.test(normalizedPan)) {
+                throw new Error("Invalid PAN format. Please enter PAN like ABCDE1234F.");
+            }
+            if (normalizedGstin && !GSTIN_REGEX.test(normalizedGstin)) {
+                throw new Error("Invalid GSTIN format. Please enter a valid 15-character GSTIN.");
+            }
+            if (!normalizedWebsite) {
+                throw new Error("Invalid website URL. Please enter a valid company website.");
+            }
+            if (normalizedPan && normalizedGstin && normalizedGstin.slice(2, 12) !== normalizedPan) {
+                throw new Error("GSTIN PAN segment must match the entered PAN.");
+            }
+
+            const allUsers = await db.getUsers();
+            const existingUserByEmail = (allUsers || []).find(
+                (u: any) => String(u?.email || "").trim().toLowerCase() === String(allValues?.email || "").trim().toLowerCase()
+            );
+
+            const orgId = existingUserByEmail?.orgId || uuidv4();
             const nowIso = new Date().toISOString();
+            const cleanAddress1 = String(allValues.address1 || "").trim();
+            const cleanAddress2 = String(allValues.address2 || "").trim();
+            const mergedAddress = `${cleanAddress1} ${cleanAddress2}`.trim();
+            const normalizedMobile = allValues.mobile?.startsWith("+") ? allValues.mobile : `+${allValues.mobile}`;
+            const userGuiId = existingUserByEmail?.guiId || uuidv4();
+            const resolvedCompanyType = String(allValues.companyType || allValues.industry || "").trim();
+            const resolvedIndustry = String(allValues.industry || "").trim();
+            const resolvedCity = String(allValues.city || "").trim();
+            const resolvedState = String(allValues.state || "").trim();
+            const resolvedCountry = String(allValues.country || "").trim();
+            const resolvedZip = String(allValues.zip || "").trim();
+            const resolvedCompany = String(allValues.company || "").trim();
 
             const companyPayload = {
-                id: Date.now(),
+                id: existingUserByEmail ? undefined : Date.now(),
                 guiId: orgId,
-                name: values.company,
-                company: values.company,
-                industry: values.industry || "",
-                industryType: values.industry || "",
-                companyType: values.industry || "",
-                website: values.website,
-                gstin: values.gstin,
-                cin: values.cin || "",
-                incorpDate: values.incorpDate || "",
-                employeeCount: values.employeeCount || "",
-                address1: values.address1 || "",
-                address2: values.address2 || "",
-                address: `${values.address1 ?? ""} ${values.address2 ?? ""}`.trim(),
-                city: values.city,
-                state: values.state,
-                country: values.country,
-                zipCode: values.zip,
+                name: resolvedCompany,
+                company: resolvedCompany,
+                industry: resolvedIndustry,
+                industryType: resolvedIndustry,
+                companyType: resolvedCompanyType,
+                website: normalizedWebsite,
+                pan: normalizedPan,
+                gstin: normalizedGstin,
+                cin: allValues.cin || "",
+                incorpDate: allValues.incorpDate || "",
+                employeeCount: allValues.employeeCount || "",
+                address1: cleanAddress1,
+                address2: cleanAddress2,
+                address: mergedAddress,
+                city: resolvedCity,
+                state: resolvedState,
+                country: resolvedCountry,
+                zip: resolvedZip,
+                zipCode: resolvedZip,
                 registeredOn: nowIso,
                 companyLogo: "",
             };
@@ -123,36 +249,56 @@ const SignInSignUp: React.FC = () => {
             const existingCompany = await db.getCompanyByGuiId(orgId);
             if (!existingCompany) {
                 await db.addCompany(companyPayload);
+            } else {
+                await db.updateCompany(existingCompany.id, {
+                    ...existingCompany,
+                    ...companyPayload,
+                    id: existingCompany.id,
+                });
             }
 
             const newUser = {
-                id: Date.now() + 1,
-                guiId: uuidv4(),
-                name: values.name,
-                company: values.company,
-                designation: values.designation,
-                mobile: values.mobile,
-                email: values.email,
-                whatsapp: values.mobile?.startsWith("+") ? values.mobile : `+${values.mobile}`,
-                address: `${values.address1 ?? ""} ${values.address2 ?? ""}`.trim(),
-                city: values.city,
-                state: values.state,
-                country: values.country,
-                zipCode: values.zip,
-                password: values.password,
-                Password: values.password,
+                ...allValues,
+                id: existingUserByEmail?.id ?? Date.now() + 1,
+                guiId: userGuiId,
+                name: allValues.name,
+                company: resolvedCompany,
+                designation: allValues.designation,
+                mobile: normalizedMobile,
+                email: allValues.email,
+                whatsapp: normalizedMobile,
+                address1: cleanAddress1,
+                address2: cleanAddress2,
+                address: mergedAddress,
+                city: resolvedCity,
+                state: resolvedState,
+                country: resolvedCountry,
+                zip: resolvedZip,
+                zipCode: resolvedZip,
+                password: allValues.password,
+                Password: allValues.password,
                 isTempPassword: false,
                 role: "admin",
                 userType: "IND",
                 orgId,
-                companyType: values.industry || "",
-                industryType: values.industry || "",
-                companyLogo: "",
+                companyType: resolvedCompanyType,
+                industryType: resolvedIndustry,
+                website: normalizedWebsite,
+                pan: normalizedPan,
+                gstin: normalizedGstin,
+                companyLogo: existingUserByEmail?.companyLogo || "",
                 registeredOn: nowIso,
-                ...values,
             };
 
-            await db.addUsers(newUser);
+            if (existingUserByEmail?.id != null) {
+                await db.updateUsers(existingUserByEmail.id, {
+                    ...existingUserByEmail,
+                    ...newUser,
+                    id: existingUserByEmail.id,
+                });
+            } else {
+                await db.addUsers(newUser);
+            }
             localStorage.setItem("user", JSON.stringify(newUser));
             notify.success("Registration successful!");
             setTimeout(() => navigate("/profile"), 1000);
@@ -172,19 +318,99 @@ const SignInSignUp: React.FC = () => {
                         </Form.Item>
                     </Col>
                     <Col span={12}>
+                        <Form.Item
+                            name="companyType"
+                            label="Company Type"
+                            rules={[{ required: true, message: "Company type is required" }]}
+                        >
+                            <Select placeholder="Select company type">
+                                <Select.Option value="Mining">Mining</Select.Option>
+                                <Select.Option value="Construction">Construction</Select.Option>
+                                <Select.Option value="Equipment Supplier">Equipment Supplier</Select.Option>
+                            </Select>
+                        </Form.Item>
+                    </Col>
+
+                    <Col span={12}>
                         <Form.Item name="industry" label="Industry Type">
                             <Input className="mb-10" />
                         </Form.Item>
                     </Col>
 
                     <Col span={12}>
-                        <Form.Item name="website" label="Company Website" rules={[{ required: true }]}>
-                            <Input className="mb-10" />
+                        <Form.Item
+                            name="website"
+                            label="Company Website"
+                            validateTrigger={["onBlur", "onSubmit"]}
+                            rules={[
+                                { required: true, message: "Company website is required" },
+                                {
+                                    validator: (_, value) => {
+                                        if (normalizeWebsiteUrl(value)) return Promise.resolve();
+                                        return Promise.reject(new Error("Enter a valid URL (e.g. https://example.com)."));
+                                    },
+                                },
+                            ]}
+                        >
+                            <Input className="mb-10" placeholder="https://example.com" />
                         </Form.Item>
                     </Col>
                     <Col span={12}>
-                        <Form.Item name="gstin" label="PAN / GSTIN" rules={[{ required: true }]}>
-                            <Input className="mb-10" />
+                        <Form.Item
+                            name="pan"
+                            label="PAN"
+                            validateTrigger={["onChange", "onBlur"]}
+                            rules={[
+                                {
+                                    validator: (_, value) => {
+                                        const pan = normalizeTaxId(value);
+                                        if (!pan || PAN_REGEX.test(pan)) {
+                                            return Promise.resolve();
+                                        }
+                                        return Promise.reject(new Error("Enter a valid PAN (e.g. ABCDE1234F)."));
+                                    },
+                                },
+                            ]}
+                        >
+                            <Input
+                                className="mb-10"
+                                maxLength={10}
+                                placeholder="ABCDE1234F"
+                                onChange={(e) => form.setFieldsValue({ pan: sanitizePanInput(e.target.value) })}
+                            />
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item
+                            name="gstin"
+                            label="GSTIN"
+                            dependencies={["pan"]}
+                            validateTrigger={["onChange", "onBlur"]}
+                            rules={[
+                                {
+                                    validator: (_, value) => {
+                                        const gstin = normalizeTaxId(value);
+                                        if (!gstin) {
+                                            return Promise.resolve();
+                                        }
+                                        if (!GSTIN_REGEX.test(gstin)) {
+                                            return Promise.reject(new Error("Enter a valid GSTIN (15 characters)."));
+                                        }
+                                        const pan = normalizeTaxId(form.getFieldValue("pan"));
+                                        if (pan && gstin.slice(2, 12) !== pan) {
+                                            return Promise.reject(new Error("GSTIN PAN segment must match the entered PAN."));
+                                        }
+                                        return Promise.resolve();
+                                    },
+                                },
+                            ]}
+                        >
+                            <Input
+                                className="mb-10"
+                                maxLength={15}
+                                placeholder="22ABCDE1234F1Z5"
+                                onChange={(e) => form.setFieldsValue({ gstin: sanitizeGstinInput(e.target.value) })}
+                            />
                         </Form.Item>
                     </Col>
 
@@ -207,7 +433,6 @@ const SignInSignUp: React.FC = () => {
                             <Select
                                 placeholder="Select"
                                 allowClear
-                                style={{ margin: "10px" }}
                             >
                                 <Select.Option value="1-10">1-10</Select.Option>
                                 <Select.Option value="11-50">11-50</Select.Option>
@@ -252,8 +477,29 @@ const SignInSignUp: React.FC = () => {
                         </Form.Item>
                     </Col>
                     <Col span={12}>
-                        <Form.Item name="zip" label="Postal / ZIP Code" rules={[{ required: true }]}>
-                            <Input className="mb-10" />
+                        <Form.Item
+                            name="zip"
+                            label="Postal / ZIP Code"
+                            validateTrigger={["onChange", "onBlur"]}
+                            rules={[
+                                { required: true, message: "Postal / ZIP Code is required" },
+                                {
+                                    validator: (_, value) => {
+                                        const zip = (value || "").trim();
+                                        if (!zip || ZIP_REGEX.test(zip)) {
+                                            return Promise.resolve();
+                                        }
+                                        return Promise.reject(new Error("Enter a valid ZIP code (e.g. 560001, 12345, or 12345-6789)."));
+                                    },
+                                },
+                            ]}
+                        >
+                            <Input
+                                className="mb-10"
+                                maxLength={10}
+                                placeholder="560001 / 12345 / 12345-6789"
+                                onChange={(e) => form.setFieldsValue({ zip: sanitizeZipInput(e.target.value) })}
+                            />
                         </Form.Item>
                     </Col>
                 </Row>
@@ -394,6 +640,11 @@ const SignInSignUp: React.FC = () => {
         window.scrollTo(0, 0);
     }, []);
 
+    useEffect(() => {
+        const fieldsToClear = stepFieldNames.flat().map((name) => ({ name, errors: [] as string[] }));
+        form.setFields(fieldsToClear);
+    }, [currentStep, form]);
+
     const openTermsModal = (e: React.MouseEvent) => {
         e.preventDefault();
         setShowTermsModal(true);
@@ -460,24 +711,24 @@ const SignInSignUp: React.FC = () => {
                                 onChange={(e) => setEmail(e.target.value)}
                             />
                             <div className="password-field">
-  <input
-    className="mb-20"
-    type={showPassword ? "text" : "password"}
-    placeholder="Password"
-    value={password}
-    onChange={(e) => setPassword(e.target.value)}
-    required
-  />
+                                <input
+                                    className="mb-20"
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
 
-  <span
-    className="eye-toggle"
-    onClick={() => setShowPassword((p) => !p)}
-    role="button"
-    aria-label={showPassword ? "Hide password" : "Show password"}
-  >
-    {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
-  </span>
-</div>
+                                <span
+                                    className="eye-toggle"
+                                    onClick={() => setShowPassword((p) => !p)}
+                                    role="button"
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+                                </span>
+                            </div>
 
                             <div className="checkbox">
                                 <input
@@ -512,17 +763,15 @@ const SignInSignUp: React.FC = () => {
                             </div>
 
                             <div className="form-section">
-                                <Form layout="vertical" form={form} onFinish={handleFinish}>
-                                    {steps.map((step, idx) => (
-                                        <div key={idx} style={{ display: idx === currentStep ? "block" : "none" }}>
-                                            {step.content}
-                                        </div>
-                                    ))}
+                                <Form layout="vertical" form={form} onFinish={handleFinish} validateTrigger="onSubmit">
+                                    <div key={currentStep}>
+                                        {steps[currentStep].content}
+                                    </div>
 
                                     <div className="form-actions">
-                                        {currentStep > 0 && <Button onClick={handlePrev}>Prev</Button>}
+                                        {currentStep > 0 && <Button htmlType="button" onClick={handlePrev}>Prev</Button>}
                                         {currentStep < steps.length - 1 ? (
-                                            <Button type="primary" onClick={handleNext}>
+                                            <Button type="primary" htmlType="button" onClick={handleNext}>
                                                 Next
                                             </Button>
                                         ) : (

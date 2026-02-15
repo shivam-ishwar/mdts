@@ -97,8 +97,6 @@ const ModuleLibrary = () => {
           console.error("Error fetching modules:", err);
           setModulesData([]);
         });
-      console.log(modulesData);
-
 
       db.getAllMineTypes()
         .then((mine) => setMineTypes(mine.filter((item: any) => item.orgId == currentUser.orgId)))
@@ -159,8 +157,6 @@ const ModuleLibrary = () => {
     });
 
     setFilteredModules(filtered);
-    console.log(filtered);
-
   }, [searchTerm, selectedOption, newLibraryMineTypeFilter, modulesData]);
 
   const handleModuleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -408,7 +404,7 @@ const ModuleLibrary = () => {
     <>
       <div className="page-heading-module-library">
             <p className="page-heading-title">Module Library</p>
-            <span className="pl-subtitle">Manage your org projects and ownership</span>
+            <span className="pl-subtitle">Build reusable module templates for project planning</span>
       </div>
 
       <div className="headings">

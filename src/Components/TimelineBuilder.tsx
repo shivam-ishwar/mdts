@@ -174,8 +174,6 @@ const TimeBuilder = () => {
       setSelectedProjectId(id || "");
       setSelectedProject(selectedProject || {});
       setFinalHolidays(holidays || []);
-      console.log(initialStatus);
-
       setSelectedLibraryId(initialStatus?.id);
       setLibraryName(initialStatus?.library || []);
       setSelectedItems(initialStatus?.items || []);
@@ -2572,7 +2570,7 @@ const TimeBuilder = () => {
                 <p className="page-heading-title">
                   {isReplanMode ? "Replan Timeline" : isUpdateMode ? "Edit Timeline" : "Timeline Builder"}
                 </p>
-                <span className="pl-subtitle">Manage your org projects and ownership</span>
+                <span className="pl-subtitle">Design project timelines with sequencing and dependencies</span>
               </div>
 
               <div>

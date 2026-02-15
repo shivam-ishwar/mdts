@@ -146,7 +146,7 @@ const DPRCostBuilder = () => {
         <div className="dpr-cost-heading-inner">
           <div>
             <p className="page-heading-title">DPR Cost Builder</p>
-            <span className="pl-subtitle">Manage your org projects and ownership</span>
+            <span className="pl-subtitle">Review and consolidate DPR cost across activities</span>
           </div>
         </div>
       </div>

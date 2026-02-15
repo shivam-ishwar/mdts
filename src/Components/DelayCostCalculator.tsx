@@ -408,7 +408,7 @@ const DelayCostCalculator = () => {
       <div className="delay-cost-heading">
         <div>
           <p className="page-heading-title">Delay Cost Builder</p>
-          <span className="pl-subtitle">Manage your org projects and ownership</span>
+          <span className="pl-subtitle">Estimate delay impact and cost exposure activity-wise</span>
         </div>
       </div>
 

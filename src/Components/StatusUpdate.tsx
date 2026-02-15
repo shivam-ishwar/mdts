@@ -2597,7 +2597,7 @@ export const StatusUpdate = () => {
   <div className="status-update-header">
     <div>
     <p className="page-heading-title">Status Update</p>
-    <span className="pl-subtitle">Manage your org projects and ownership</span>
+    <span className="pl-subtitle">Update activity progress, actual dates, and execution status</span>
     </div>
 
     {selectedProject?.projectTimeline != null && (

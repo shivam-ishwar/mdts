@@ -185,6 +185,27 @@
     margin: 10px 0 20px;
 }
 
+.projects-empty-state {
+    border: 1px dashed var(--border);
+    background: var(--bg-muted);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.projects-empty-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.projects-empty-subtitle {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-secondary);
+}
+
 .tab-container {
     display: flex;
     flex-direction: column;

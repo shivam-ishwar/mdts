@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ResponsiveContainer,
     BarChart,
@@ -94,6 +94,13 @@ const fmt = (d: Date | null) => {
 };
 
 const asNum = (v: any) => {
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    if (typeof v === "string") {
+        const cleaned = v.replace(/,/g, "").trim();
+        if (!cleaned) return 0;
+        const n = Number(cleaned);
+        return Number.isFinite(n) ? n : 0;
+    }
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
 };
@@ -119,33 +126,97 @@ const Charts = (props: any) => {
     const projectId = props?.id ?? props?.code ?? props?.projectId;
 
     const [timeline, setTimeline] = useState<any[]>([]);
+    const [timelineState, setTimelineState] = useState<"loading" | "ready" | "missing" | "error">("loading");
+    const [userLabelMap, setUserLabelMap] = useState<Record<string, string>>({});
     const [selectedModule, setSelectedModule] = useState<string>("__INIT__");
     const [selectedGroup, setSelectedGroup] = useState<string>("ALL");
+    const metricsRailRef = useRef<HTMLDivElement | null>(null);
     const userChangedModuleRef = useRef(false);
     const userChangedGroupRef = useRef(false);
+    const [canScrollMetricsLeft, setCanScrollMetricsLeft] = useState(false);
+    const [canScrollMetricsRight, setCanScrollMetricsRight] = useState(false);
 
     useEffect(() => {
-        if (!projectId) return;
+        if (!projectId) {
+            setTimeline([]);
+            setTimelineState("missing");
+            return;
+        }
 
         (async () => {
             try {
+                setTimelineState("loading");
                 const projects = await db.getProjects();
                 const project = (projects || []).find((p: any) => String(p.id) === String(projectId));
-                if (!project) return;
+                if (!project) {
+                    setTimeline([]);
+                    setTimelineState("missing");
+                    return;
+                }
 
                 const latestVersion = localStorage.getItem("latestProjectVersion");
                 const versions = project?.projectTimeline || [];
                 const selected = latestVersion ? versions.find((v: any) => String(v.version) === String(latestVersion)) : versions[0];
 
-                if (!selected?.timelineId) return;
+                if (!selected?.timelineId) {
+                    setTimeline([]);
+                    setTimelineState("missing");
+                    return;
+                }
 
                 const timelineData = await db.getProjectTimelineById(selected.timelineId);
-                setTimeline(timelineData || []);
+                const normalized = Array.isArray(timelineData) ? timelineData : [];
+                setTimeline(normalized);
+                setTimelineState(normalized.length ? "ready" : "missing");
             } catch (err) {
                 console.error("Failed to fetch timeline:", err);
+                setTimeline([]);
+                setTimelineState("error");
             }
         })();
     }, [projectId]);
+
+    useEffect(() => {
+        let active = true;
+
+        (async () => {
+            try {
+                const allUsers = (await db.getUsers()) || [];
+                const orgIds = uniq((timeline || []).map((m: any) => String(m?.orgId || "")).filter(Boolean));
+                const users = orgIds.length ? allUsers.filter((u: any) => orgIds.includes(String(u?.orgId || ""))) : allUsers;
+
+                const map: Record<string, string> = {};
+                for (const user of users) {
+                    const label = String(
+                        user?.name ??
+                        user?.employeeFullName ??
+                        user?.fullName ??
+                        user?.displayName ??
+                        user?.email ??
+                        user?.primaryEmail ??
+                        ""
+                    ).trim();
+
+                    if (!label) continue;
+
+                    const keys = [user?.id, user?.guiId, user?.userGuiId, user?.employeeId];
+                    for (const key of keys) {
+                        const keyStr = String(key ?? "").trim();
+                        if (keyStr) map[keyStr] = label;
+                    }
+                }
+
+                if (active) setUserLabelMap(map);
+            } catch (err) {
+                console.error("Failed to fetch users for RASI labels:", err);
+                if (active) setUserLabelMap({});
+            }
+        })();
+
+        return () => {
+            active = false;
+        };
+    }, [timeline]);
 
     const modules = useMemo(() => {
         const names = (timeline || []).map((m: any) => m?.moduleName ?? m?.parentModuleCode ?? "Module").filter(Boolean);
@@ -490,10 +561,19 @@ const Charts = (props: any) => {
     }, [data]);
 
     const costBurn = useMemo(() => {
+        const getPathValue = (obj: any, path: string) => {
+            if (!obj) return undefined;
+            if (!path.includes(".")) return obj?.[path];
+            return path.split(".").reduce((acc: any, part: string) => acc?.[part], obj);
+        };
+
         const readCost = (m: any, keys: string[]) => {
-            for (const k of keys) {
-                const v = m?.[k];
-                if (v != null && v !== "") {
+            const sources = [m, m?.cost, m?.costs, m?.financials, m?.finance];
+            for (const source of sources) {
+                if (!source) continue;
+                for (const k of keys) {
+                    const v = getPathValue(source, k);
+                    if (v == null || v === "") continue;
                     const n = asNum(v);
                     if (n) return n;
                 }
@@ -533,10 +613,10 @@ const Charts = (props: any) => {
         for (const r of data) {
             const m = r.meta || {};
 
-            const budgetTotal = readCost(m, ["budget", "budgetCost", "budgetedCost", "plannedCost", "plannedBudget", "activityBudget"]);
-            const actualTotal = readCost(m, ["actualCost", "actualSpend", "spent", "actualAmount", "expense", "costActual"]);
+            const budgetTotal = readCost(m, ["budget", "budgetCost", "budgetedCost", "plannedCost", "plannedBudget", "activityBudget", "projectCost", "cost.projectCost"]);
+            const actualTotal = readCost(m, ["actualCost", "actualSpend", "spent", "actualAmount", "expense", "costActual", "opCost", "cost.opCost"]);
             const delayTotal = readCost(m, ["delayCost", "delay_cost", "costDelay", "delayPenalty", "delayPenaltyCost"]);
-            const dprTotal = readCost(m, ["dprCost", "dpr_cost", "dailyProgressCost", "progressCost", "dprAmount"]);
+            const dprTotal = readCost(m, ["dprCost", "dpr_cost", "dailyProgressCost", "progressCost", "dprAmount", "cost.dprCost"]);
 
             if (budgetTotal > 0) anyBudget = true;
             if (actualTotal > 0) anyActual = true;
@@ -633,8 +713,9 @@ const Charts = (props: any) => {
             const roles = getRasi(r.meta || {});
             for (const key of roleKeys) {
                 for (const u of roles[key]) {
-                    const user = String(u || "").trim();
-                    if (!user) continue;
+                    const rawId = String(u || "").trim();
+                    if (!rawId) continue;
+                    const user = userLabelMap[rawId] || rawId;
                     const prev = map.get(user) || { user, R: 0, A: 0, S: 0, I: 0, total: 0 };
                     prev[key] += 1;
                     prev.total += 1;
@@ -647,7 +728,7 @@ const Charts = (props: any) => {
         const overloaded = rows.filter((x) => x.R >= 8).map((x) => x.user);
 
         return { rows, overloaded };
-    }, [data]);
+    }, [data, userLabelMap]);
 
     const CustomTooltip = ({ active, payload }: any) => {
         if (!active || !payload?.length) return null;
@@ -722,88 +803,190 @@ const Charts = (props: any) => {
 
     const topStats = useMemo(() => {
         const totalActivities = data.length;
+        const completedCount = health.donut.find((d) => d.name === "Completed")?.value ?? 0;
+        const delayedCount = health.donut.find((d) => d.name === "Delayed")?.value ?? 0;
+        const atRiskCount = health.donut.find((d) => d.name === "At Risk")?.value ?? 0;
+        const blockedCount = activityStatus.counts.Blocked ?? 0;
 
-        const activeActivities = totalActivities - (health.donut.find((d) => d.name === "Completed")?.value ?? 0);
+        const completionPct = totalActivities ? Math.round((completedCount / totalActivities) * 100) : 0;
 
-        const onTrackCount = health.donut.find((d) => d.name === "On Track")?.value ?? 0;
-        const onTrackPct = activeActivities ? Math.round((onTrackCount / activeActivities) * 100) : 0;
+        const completedOnTime = data.filter((r) => r.status === "Completed" && r.delayDays <= 0).length;
+        const onTimeCompletionPct = completedCount ? Math.round((completedOnTime / completedCount) * 100) : 0;
+        const lateCompletedCount = Math.max(0, completedCount - completedOnTime);
 
-        const delayedBeyondSlack = health.totals.delayedBeyondSlack;
+        const riskLoad = delayedCount + atRiskCount + blockedCount;
+        const riskLoadPct = totalActivities ? Math.round((riskLoad / totalActivities) * 100) : 0;
 
         const totalDelayDays = Math.round(delayBreakdown.totals.totalDelayDays * 10) / 10;
         const totalDelayedActivities = delayBreakdown.totals.totalDelayedActivities;
+        const avgDelayPerDelayedActivity = totalDelayedActivities ? Math.round((totalDelayDays / totalDelayedActivities) * 10) / 10 : 0;
 
         const budgeted = costBurn.totals.budgeted;
         const actualPlusDelay = costBurn.totals.actualPlusDelay;
         const variance = Math.round((actualPlusDelay - budgeted) * 100) / 100;
+        const variancePct = budgeted > 0 ? Math.round((variance / budgeted) * 1000) / 10 : 0;
 
-        const costLabel = variance > 0 ? "Overrun" : variance < 0 ? "Under budget" : "On budget";
-        const costValue = Math.abs(variance);
+        const topDelayBucket = delayBreakdown.chartData.find((x) => x.delayDays > 0)?.name ?? "No active delay bucket";
 
         return {
+            completionPct,
+            completedCount,
             totalActivities,
-            onTrackPct,
-            delayedBeyondSlack,
-            avgDelayDays: health.totals.avgDelayDays,
+            onTimeCompletionPct,
+            lateCompletedCount,
+            riskLoad,
+            riskLoadPct,
             totalDelayDays,
             totalDelayedActivities,
+            avgDelayPerDelayedActivity,
+            topDelayBucket,
             cost: {
-                label: costLabel,
-                value: costValue,
+                variance,
+                variancePct,
+                budgeted,
+                forecast: actualPlusDelay,
                 overrunStart: costBurn.totals.firstOverrunDate,
                 hasAny: costBurn.hasAny,
             },
-            blocked: activityStatus.counts.Blocked,
         };
-    }, [data.length, health, delayBreakdown, costBurn, activityStatus]);
+    }, [data, health, delayBreakdown, costBurn, activityStatus]);
+
+    const topMetrics = useMemo(() => {
+        const costStatus = !topStats.cost.hasAny
+            ? "Cost data unavailable"
+            : topStats.cost.overrunStart
+                ? `Overrun starts: ${topStats.cost.overrunStart}`
+                : "No overrun detected";
+
+        return [
+            {
+                key: "completion",
+                label: "Completion Progress",
+                value: `${topStats.completionPct}%`,
+                hint: `${topStats.completedCount} of ${topStats.totalActivities} activities closed`,
+                meta: `${topStats.totalActivities - topStats.completedCount} activities open`,
+            },
+            {
+                key: "onTime",
+                label: "On-Time Completion",
+                value: `${topStats.onTimeCompletionPct}%`,
+                hint: `${topStats.lateCompletedCount} completed late`,
+                meta: `${topStats.completedCount} activities completed`,
+            },
+            {
+                key: "risk",
+                label: "Execution Risk Load",
+                value: `${topStats.riskLoad}`,
+                hint: `${topStats.riskLoadPct}% of portfolio at risk`,
+                meta: "Delayed + At Risk + Blocked",
+            },
+            {
+                key: "delay",
+                label: "Delay Exposure",
+                value: `${topStats.totalDelayDays}d`,
+                hint: `${topStats.totalDelayedActivities} delayed activities`,
+                meta: `Avg ${topStats.avgDelayPerDelayedActivity}d per delayed activity`,
+            },
+            {
+                key: "cost",
+                label: "Cost Variance vs Budget",
+                value: `${Number(topStats.cost.variancePct).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
+                hint: `Forecast ${Number(topStats.cost.forecast).toLocaleString(undefined, { maximumFractionDigits: 0 })} vs Budget ${Number(topStats.cost.budgeted).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                meta: `${costStatus} • Top delay driver: ${topStats.topDelayBucket}`,
+            },
+        ];
+    }, [topStats]);
+
+    const updateMetricsScrollState = useCallback(() => {
+        const el = metricsRailRef.current;
+        if (!el) {
+            setCanScrollMetricsLeft(false);
+            setCanScrollMetricsRight(false);
+            return;
+        }
+
+        const left = el.scrollLeft > 2;
+        const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+        setCanScrollMetricsLeft(left);
+        setCanScrollMetricsRight(right);
+    }, []);
+
+    useEffect(() => {
+        updateMetricsScrollState();
+        window.addEventListener("resize", updateMetricsScrollState);
+        return () => window.removeEventListener("resize", updateMetricsScrollState);
+    }, [updateMetricsScrollState, topMetrics.length]);
+
+    const scrollMetrics = (dir: "left" | "right") => {
+        const el = metricsRailRef.current;
+        if (!el) return;
+
+        const card = el.querySelector(".statCard") as HTMLElement | null;
+        const cardStep = card ? card.getBoundingClientRect().width + 12 : el.clientWidth;
+        const distance = cardStep * 4;
+        el.scrollBy({ left: dir === "right" ? distance : -distance, behavior: "smooth" });
+    };
+
+    if (timelineState === "loading") {
+        return (
+            <div className="chartsPage">
+                <div className="timelineEmptyState">
+                    <div className="timelineEmptyTitle">Loading timeline insights...</div>
+                    <div className="timelineEmptySub">Please wait while we prepare your project charts.</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (timelineState === "missing") {
+        return (
+            <div className="chartsPage">
+                <div className="timelineEmptyState">
+                    <div className="timelineEmptyTitle">No timeline content available</div>
+                    <div className="timelineEmptySub">
+                        This project does not have a published timeline yet. Create a timeline version to unlock schedule, cost, and RASI analytics.
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (timelineState === "error") {
+        return (
+            <div className="chartsPage">
+                <div className="timelineEmptyState">
+                    <div className="timelineEmptyTitle">Unable to load timeline content</div>
+                    <div className="timelineEmptySub">Please refresh the page or verify timeline data for this project.</div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="chartsPage">
-            <div className="topStatsGrid">
-                <div className="statCard">
-                    <div className="statLabel">Activities</div>
-                    <div className="statValue">{topStats.totalActivities}</div>
+            <div className="topStatsWrap">
+                {canScrollMetricsLeft ? (
+                    <button className="metricsArrow metricsArrowLeft" onClick={() => scrollMetrics("left")} aria-label="Scroll metrics left">
+                        ‹
+                    </button>
+                ) : null}
+
+                <div className="topStatsRail" ref={metricsRailRef} onScroll={updateMetricsScrollState}>
+                    {topMetrics.map((metric) => (
+                        <div className="statCard" key={metric.key}>
+                            <div className="statLabel">{metric.label}</div>
+                            <div className="statValue">{metric.value}</div>
+                            <div className="statHint">{metric.hint}</div>
+                            <div className="statMeta">{metric.meta}</div>
+                        </div>
+                    ))}
                 </div>
 
-                <div className="statCard">
-                    <div className="statLabel">On-Track %</div>
-                    <div className="statValue">
-                        {topStats.onTrackPct}
-                        <span className="statSuffix">%</span>
-                    </div>
-                </div>
-
-                <div className="statCard">
-                    <div className="statLabel">Delayed Beyond Slack</div>
-                    <div className="statValue">{topStats.delayedBeyondSlack}</div>
-                </div>
-
-                <div className="statCard">
-                    <div className="statLabel">Total Delay Impact</div>
-                    <div className="statValue">
-                        {topStats.totalDelayDays}
-                        <span className="statSuffix">delay-days</span>
-                    </div>
-                    <div className="statHint">{topStats.totalDelayedActivities} delayed activities</div>
-                </div>
-
-                <div className="statCard">
-                    <div className="statLabel">{topStats.cost.label}</div>
-                    <div className="statValue">
-                        {Number(topStats.cost.value).toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                    </div>
-                    <div className="tagRow">
-                        {topStats.cost.hasAny ? (
-                            topStats.cost.overrunStart ? (
-                                <span className="tag tagRed">Overrun starts: {topStats.cost.overrunStart}</span>
-                            ) : (
-                                <span className="tag tagGreen">No overrun detected</span>
-                            )
-                        ) : (
-                            <span className="tag tagGray">No cost data</span>
-                        )}
-                    </div>
-                </div>
+                {canScrollMetricsRight ? (
+                    <button className="metricsArrow metricsArrowRight" onClick={() => scrollMetrics("right")} aria-label="Scroll metrics right">
+                        ›
+                    </button>
+                ) : null}
             </div>
 
             <div className="panel">

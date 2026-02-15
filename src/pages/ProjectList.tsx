@@ -217,7 +217,7 @@ const ProjectsList = () => {
         <div className="pl-header">
           <div className="pl-title">
             <p className="page-heading-title">Projects</p>
-            <span className="pl-subtitle">Manage your org projects and ownership</span>
+            <span className="pl-subtitle">View and manage projects across your organization</span>
           </div>
 
           <Button

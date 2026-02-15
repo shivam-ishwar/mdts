@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import Home from "../pages/Home";
 import NotFound from "../pages/NotFound";
@@ -38,9 +39,36 @@ import ActivityCost from "../pages/ActivityCost";
 import CommercialActivityPlanner from "../pages/ComercialActivityPlanner";
 import ManageRaci from "../pages/ManageRaci";
 import Dashboard from "../Components/Dashboard";
+import { userStore } from "../Utils/UserStore";
 
 const AppRoutes = () => {
-    const isAuthenticated = !!localStorage.getItem("user");
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    useEffect(() => {
+        const computeAuth = () => {
+            const raw = localStorage.getItem("user");
+            if (!raw) {
+                setIsAuthenticated(false);
+                return;
+            }
+            try {
+                const parsed = JSON.parse(raw);
+                const valid = !!parsed && typeof parsed === "object" && (parsed.id != null || !!parsed.email);
+                setIsAuthenticated(valid);
+            } catch {
+                setIsAuthenticated(false);
+            }
+        };
+
+        computeAuth();
+        const unsubscribe = userStore.subscribe(computeAuth);
+        window.addEventListener("storage", computeAuth);
+
+        return () => {
+            unsubscribe();
+            window.removeEventListener("storage", computeAuth);
+        };
+    }, []);
 
     return (
         <Router>

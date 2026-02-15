@@ -9,7 +9,11 @@ class UserStore {
     };
 
     setUser = (user: any) => {
-        localStorage.setItem('user', JSON.stringify(user));
+        if (user == null) {
+            localStorage.removeItem('user');
+        } else {
+            localStorage.setItem('user', JSON.stringify(user));
+        }
         this.notify();
     };
 

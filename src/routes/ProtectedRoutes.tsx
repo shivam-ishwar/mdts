@@ -19,26 +19,19 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const [isAllowed, setIsAllowed] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    const checkAccess = () => {
-      const rawUser = localStorage.getItem("user");
-      if (!rawUser) {
-        setIsAllowed(false);
-        return;
-      }
+  const getSyncAccess = () => {
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) return false;
+    try {
       const user = JSON.parse(rawUser);
-
-      if (action) {
-        setIsAllowed(hasPermission(user.role, action));
-      } else {
-        setIsAllowed(true);
-      }
-    };
-
-    if (!checkAuthAsync) {
-      checkAccess();
+      const validUser = !!user && typeof user === "object" && (user.id != null || !!user.email);
+      if (!validUser) return false;
+      if (action) return hasPermission(user.role, action);
+      return true;
+    } catch {
+      return false;
     }
-  }, [checkAuthAsync, action]);
+  };
 
   useEffect(() => {
     if (checkAuthAsync) {
@@ -53,6 +46,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       asyncAuthCheck();
     }
   }, [checkAuthAsync]);
+
+  if (!checkAuthAsync) {
+    return getSyncAccess() ? children : <Navigate to={redirectPath} replace />;
+  }
 
   if (isAllowed === null) {
     return <div>Loading...</div>;

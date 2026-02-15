@@ -69,30 +69,45 @@ const Profile = () => {
 
     const fillUsersData = async () => {
         const currentUserId = getCurrentUserId();
-        const userData = await db.getUserById(currentUserId);
+        const currentUser = getCurrentUser();
+        let userData = currentUserId ? await db.getUserById(currentUserId) : null;
+
+        if (!userData && currentUser?.email) {
+            const allUsers = await db.getUsers();
+            userData = (allUsers || []).find(
+                (u: any) => String(u?.email || "").trim().toLowerCase() === String(currentUser.email || "").trim().toLowerCase()
+            ) || null;
+        }
+
         if (userData) {
+            const companyData = userData?.orgId ? await db.getCompanyByGuiId(String(userData.orgId)) : null;
+            const addressLine1 = userData?.address1 ?? companyData?.address1 ?? "";
+            const addressLine2 = userData?.address2 ?? companyData?.address2 ?? "";
+            const mergedAddress = String(userData?.address ?? `${addressLine1} ${addressLine2}`.trim() ?? "").trim();
+
             setFormData({
                 id: userData.id || "",
                 name: userData.name || "",
                 guiId: userData.guiId || "",
-                company: userData.company || "",
+                company: userData.company || companyData?.name || companyData?.company || "",
                 designation: userData.designation || "",
-                companyType: userData.companyType || "",
-                industryType: userData.industryType || "",
+                companyType: userData.companyType || companyData?.companyType || "",
+                industryType: userData.industryType || companyData?.industryType || "",
                 mobile: userData.mobile || "",
                 email: userData.email || "",
                 whatsapp: userData.whatsapp || "",
                 registeredOn: userData.registeredOn || "",
                 profilePhoto: userData.profilePhoto || "",
                 companyLogo: userData.companyLogo || "",
-                address: userData.address,
-                city: userData.city,
-                state: userData.state,
-                country: userData.country,
-                zipCode: userData.zipCode || "",
+                address: mergedAddress,
+                city: userData.city || companyData?.city || "",
+                state: userData.state || companyData?.state || "",
+                country: userData.country || companyData?.country || "",
+                zipCode: userData.zipCode || userData.zip || companyData?.zipCode || "",
                 role: userData.role || "",
                 isTempPassword: userData.isTempPassword,
                 Password: userData.Password || "",
+                orgId: userData.orgId || companyData?.guiId || "",
             });
             form.resetFields();
         }

@@ -274,7 +274,7 @@ export const HolidayCalender = () => {
           <Box className="holiday-header">
             <div>
               <p className="page-heading-title">Holiday Calendar</p>
-              <span className="pl-subtitle">Manage your org projects and ownership</span>
+              <span className="pl-subtitle">Define organization-wide holidays and non-working days</span>
             </div>
 
             <div className="holiday-header-actions">

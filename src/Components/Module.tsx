@@ -1021,6 +1021,71 @@ const Module = () => {
         return JSON.parse(t);
     };
 
+    const toNumberOrUndefined = (v: any) => {
+        if (v === undefined || v === null || v === "") return undefined;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : undefined;
+    };
+
+    const normalizeBudget = (budget: any) => {
+        if (budget == null) return undefined;
+        if (typeof budget === "number" || typeof budget === "string") {
+            const dprCost = toNumberOrUndefined(budget);
+            return dprCost === undefined ? undefined : { dprCost };
+        }
+
+        const projectCost = toNumberOrUndefined(
+            budget?.projectCost ?? budget?.project_budget ?? budget?.project
+        );
+        const opCost = toNumberOrUndefined(
+            budget?.opCost ?? budget?.operationalCost ?? budget?.operational
+        );
+        const dprCost = toNumberOrUndefined(
+            budget?.dprCost ?? budget?.dpr ?? budget?.totalBudget ?? budget?.total
+        );
+
+        if (projectCost === undefined && opCost === undefined && dprCost === undefined) return undefined;
+        return { projectCost, opCost, dprCost };
+    };
+
+    const normalizeDocuments = (docs: any) => {
+        const list = ensureArray(docs);
+        const normalized = list
+            .map((d: any) => {
+                if (typeof d === "string") return d.trim();
+                return String(d?.name ?? d?.title ?? d?.documentName ?? "").trim();
+            })
+            .filter(Boolean);
+        return normalized.length ? normalized : undefined;
+    };
+
+    const normalizeNotifications = (n: any) => {
+        if (!n || typeof n !== "object") return undefined;
+
+        const started = n.started ?? n.onStart;
+        const completed = n.completed ?? n.onComplete;
+        const delayed = n.delayed ?? n.onDelay;
+
+        const normalizeNode = (node: any) => {
+            if (!node || typeof node !== "object") return undefined;
+            const enabled = Boolean(node.enabled);
+            const message = typeof node.message === "string" ? node.message : undefined;
+            const duration = typeof node.duration === "string" ? node.duration : undefined;
+            return { enabled, message, duration };
+        };
+
+        const s = normalizeNode(started);
+        const c = normalizeNode(completed);
+        const d = normalizeNode(delayed);
+
+        if (!s && !c && !d) return undefined;
+        return {
+            started: s ?? { enabled: false },
+            completed: c ?? { enabled: false },
+            delayed: d ?? { enabled: false },
+        };
+    };
+
     const sanitizeModuleForSave = (m: any) => {
         const now = new Date().toISOString();
         const moduleNameVal = String(m?.moduleName ?? m?.name ?? "").trim();
@@ -1033,6 +1098,9 @@ const Module = () => {
             const duration = Number(a?.duration ?? a?.durationDays ?? 1) || 1;
             const level = String(a?.level ?? "L2");
             const prerequisite = String(a?.prerequisite ?? a?.prerequisites ?? "").trim();
+            const budget = normalizeBudget(a?.cost ?? a?.budget);
+            const documents = normalizeDocuments(a?.documents ?? a?.docs ?? a?.requiredDocuments);
+            const notifications = normalizeNotifications(a?.notifications ?? a?.notification ?? a?.alerts);
 
             return {
                 code: code || `${parentCodeVal || "MD"}/${(idx + 1) * 10}`,
@@ -1041,10 +1109,10 @@ const Module = () => {
                 level: level.startsWith("L") ? level : `L${level}`,
                 prerequisite,
                 guicode: a?.guicode ?? uuidv4(),
-                raci: a?.raci,
-                notifications: a?.notifications,
-                documents: a?.documents,
-                cost: a?.cost
+                // RACI is intentionally excluded from import (set manually after import).
+                notifications,
+                documents,
+                cost: budget
             };
         });
 
@@ -1143,7 +1211,7 @@ const Module = () => {
                     <div className="module-title" style={{ display: "flex", justifyContent: "space-between", gap: "50px", alignItems: "center" }}>
                         <div>
                             <p className="page-heading-title">Modules</p>
-                            <span className="pl-subtitle">Manage your org projects and ownership</span>
+                            <span className="pl-subtitle">Create modules and activities with dependencies, costs, and alerts</span>
                         </div>
                         <div className="searching-and-create">
                             <Input
@@ -1331,7 +1399,7 @@ const Module = () => {
                                                     </Button>
                                                 </Tooltip>
                                             </Col>
-                                            <Col style={{display:"none"}}>
+                                            <Col>
                                                 <Tooltip title="Bulk Import Modules (JSON)">
                                                     <Button
                                                         type="primary"
@@ -1341,7 +1409,7 @@ const Module = () => {
                                                             setBulkJson("");
                                                         }}
                                                         className="add-module-button"
-                                                        style={{ height: "30px", fontSize: "14px" }}
+                                                        style={{ height: "30px", fontSize: "14px" ,display:"none"}}
                                                     >
                                                         Import
                                                     </Button>
@@ -2172,7 +2240,7 @@ const Module = () => {
                 >
                     <div style={{ padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
                         <div style={{ fontSize: 12, opacity: 0.75 }}>
-                            Paste an array of modules or a single module object. Fields supported: moduleName, mineType, parentModuleCode, activities[].
+                            Paste an array of modules or a single module object. RACI is excluded from import. Activity fields supported: budget/cost, documents/docs, notifications.
                         </div>
 
                         <Input.TextArea
@@ -2184,7 +2252,20 @@ const Module = () => {
                                          "mineType": "OC",
                                          "parentModuleCode": "SS",
                                          "activities": [
-                                           { "code": "SS/10", "activityName": "Kickoff", "duration": 3, "level": "L2", "prerequisite": "" }
+                                           {
+                                             "code": "SS/10",
+                                             "activityName": "Kickoff",
+                                             "duration": 3,
+                                             "level": "L2",
+                                             "prerequisite": "",
+                                             "budget": { "projectCost": 500000, "opCost": 150000, "dprCost": 650000 },
+                                             "documents": ["Kickoff MoM", "Safety Checklist"],
+                                             "notifications": {
+                                               "started": { "enabled": true, "message": "Activity started" },
+                                               "completed": { "enabled": true, "message": "Activity completed" },
+                                               "delayed": { "enabled": true, "duration": "7 days" }
+                                             }
+                                           }
                                          ]
                                        }
                                       `}

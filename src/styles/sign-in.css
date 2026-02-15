@@ -6,6 +6,8 @@
   font-family: var(--font-base);
   background: var(--bg-main);
   color: var(--text-primary);
+  --auth-control-height: 44px;
+  --auth-control-px: 12px;
 }
 
 .mb-10 {
@@ -124,28 +126,60 @@
 
 .signup-container form input[type="email"],
 .signup-container form input[type="password"],
-input[type="text"],
+.signup-container form input[type="date"],
+.signup-container input[type="text"],
 .signup-container .ant-input,
 .signup-container .ant-select-selector {
   width: 100%;
-  padding: .6rem .75rem;
+  height: var(--auth-control-height);
+  padding: 0 var(--auth-control-px);
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   font-size: 1rem;
-  /* background-color: var(--bg-muted); */
+  box-sizing: border-box;
   color: var(--text-primary);
   transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
 }
 
 .signup-container form input[type="email"]:focus,
 .signup-container form input[type="password"]:focus,
-input[type="text"]:focus,
+.signup-container form input[type="date"]:focus,
+.signup-container input[type="text"]:focus,
 .signup-container .ant-input:focus,
-.signup-container .ant-select-selector:focus {
+.signup-container .ant-select-focused .ant-select-selector {
   border-color: rgba(31, 122, 99, .60);
   box-shadow: var(--focus-ring);
   outline: none;
   background-color: var(--bg-surface);
+}
+
+.signup-container .ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--auth-control-px);
+  height: var(--auth-control-height) !important;
+  min-height: var(--auth-control-height) !important;
+}
+
+.signup-container .ant-select-single .ant-select-selector .ant-select-selection-item,
+.signup-container .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
+  line-height: calc(var(--auth-control-height) - 2px);
+}
+
+.signup-container .react-tel-input .form-control {
+  width: 100% !important;
+  height: var(--auth-control-height) !important;
+  padding-left: 56px !important;
+  border-radius: var(--radius-md) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 1rem !important;
+  box-sizing: border-box;
+}
+
+.signup-container .react-tel-input .flag-dropdown {
+  height: var(--auth-control-height) !important;
+  border-radius: var(--radius-md) 0 0 var(--radius-md) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .signup-container .mb-20 {
@@ -261,6 +295,9 @@ input[type="text"]:focus,
 .signup-container .form-actions {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding-top: 10px;
 }
 
 .signup-container .form-actions .ant-btn:last-child {
@@ -272,7 +309,11 @@ input[type="text"]:focus,
   font-size: 14px;
   padding: 6px 16px;
   border-radius: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 4px;
+}
+
+.signup-container .form-section {
+  padding-bottom: 8px;
 }
 
 .signup-container .step-header {

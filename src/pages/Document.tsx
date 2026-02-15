@@ -582,7 +582,7 @@ const Document: React.FC = () => {
                 <div className="docs-heading ">
                     <div>
                         <p className="page-heading-title">Documents</p>
-                        <span className="pl-subtitle">Manage your org projects and ownership</span>
+                        <span className="pl-subtitle">Upload, organize, and link documents to project activities</span>
                     </div>
                     <Button type="primary" className="bg-secondary add-doc-btn" size="small" icon={<PlusOutlined />} onClick={handleAddDocument}>
                         Add Document

@@ -5,6 +5,7 @@ import { BellOutlined, DownOutlined, LogoutOutlined, QuestionCircleOutlined, Set
 import "../styles/nav-bar.css";
 import { userStore } from "../Utils/UserStore";
 import { hasPermission } from "../Utils/auth";
+import { db } from "../Utils/dataStorege";
 const { Title } = Typography;
 interface NavItem {
     label: string;
@@ -17,9 +18,17 @@ interface NavItem {
     requiredPermission: any
 }
 
+type AppNotification = {
+    id: string;
+    title: string;
+    message: string;
+    severity: "high" | "medium" | "low";
+    date: string;
+};
+
 const initialNavLinks: any[] = [
     // { label: "Dashboard", action: "/dashboard", requiredPermission: "VIEW_NAVBAR_MENUS" },
-    { label: "Project", action: "/project", requiredPermission: "VIEW_NAVBAR_MENUS" },
+    { label: "Dashboard", action: "/project", requiredPermission: "VIEW_NAVBAR_MENUS" },
     { label: "Knowledge Center", action: "/knowledge-center", requiredPermission: "VIEW_NAVBAR_MENUS" },
     {
         label: "Data Master",
@@ -64,6 +73,23 @@ const Navbar: React.FC = () => {
         setIsLogoutModalVisible(true);
     };
     const [loading, setLoading] = useState(false);
+    const [notifications, setNotifications] = useState<AppNotification[]>([]);
+
+    const parseAnyDate = (raw?: string | null) => {
+        if (!raw) return null;
+        const s = String(raw).trim();
+        if (!s) return null;
+        const dmY = /^(\d{2})-(\d{2})-(\d{4})$/;
+        const m = s.match(dmY);
+        if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+        const d = new Date(s);
+        return Number.isNaN(d.getTime()) ? null : d;
+    };
+
+    const fmtDate = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    const daysDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
 
     useEffect(() => {
         const storedNavLinks = localStorage.getItem('navLinks');
@@ -88,6 +114,104 @@ const Navbar: React.FC = () => {
 
         return () => {
             unsubscribe();
+        };
+    }, []);
+
+    useEffect(() => {
+        let active = true;
+
+        const buildNotifications = async () => {
+            try {
+                const currentUser = userStore.getUser();
+                if (!currentUser?.orgId) {
+                    if (active) setNotifications([]);
+                    return;
+                }
+
+                const projects = (await db.getProjects()) || [];
+                const orgProjects = projects.filter((p: any) => String(p?.orgId || "") === String(currentUser.orgId));
+                const out: AppNotification[] = [];
+                const now = new Date();
+                const latestVersion = localStorage.getItem("latestProjectVersion");
+
+                for (const project of orgProjects) {
+                    const projectName = project?.projectParameters?.projectName || `Project ${project?.id}`;
+                    const versions = Array.isArray(project?.projectTimeline) ? project.projectTimeline : [];
+
+                    if (!versions.length) {
+                        out.push({
+                            id: `no-timeline-${project.id}`,
+                            title: "Timeline Pending",
+                            message: `${projectName}: no timeline version created yet.`,
+                            severity: "medium",
+                            date: fmtDate(now),
+                        });
+                        continue;
+                    }
+
+                    const selected =
+                        (latestVersion ? versions.find((v: any) => String(v?.version) === String(latestVersion)) : null) ||
+                        versions[versions.length - 1] ||
+                        versions[0];
+
+                    if (!selected?.timelineId) continue;
+                    const timeline = await db.getProjectTimelineById(selected.timelineId);
+                    const modules = Array.isArray(timeline) ? timeline : [];
+
+                    for (const module of modules) {
+                        for (const activity of module?.activities || []) {
+                            const activityName = activity?.activityName || activity?.code || "Activity";
+                            const plannedStart = parseAnyDate(activity?.start);
+                            const plannedEnd = parseAnyDate(activity?.end);
+                            const actualStart = parseAnyDate(activity?.actualStart);
+                            const actualFinish = parseAnyDate(activity?.actualFinish);
+                            const status = String(activity?.activityStatus || "").toLowerCase();
+
+                            if (plannedEnd && !actualFinish && daysDiff(now, plannedEnd) > 0 && status !== "completed") {
+                                const delayedBy = daysDiff(now, plannedEnd);
+                                out.push({
+                                    id: `delay-${project.id}-${activity?.code || activityName}`,
+                                    title: "Schedule Delay",
+                                    message: `${projectName} • ${activityName} is delayed by ${delayedBy} day(s).`,
+                                    severity: delayedBy > 7 ? "high" : "medium",
+                                    date: fmtDate(now),
+                                });
+                            }
+
+                            if (plannedStart && !actualStart && status !== "completed" && status !== "inprogress") {
+                                const d = daysDiff(plannedStart, now);
+                                if (d >= 0 && d <= 3) {
+                                    out.push({
+                                        id: `upcoming-${project.id}-${activity?.code || activityName}`,
+                                        title: "Upcoming Activity",
+                                        message: `${projectName} • ${activityName} starts in ${d} day(s).`,
+                                        severity: "low",
+                                        date: fmtDate(now),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                out.sort((a, b) => {
+                    const sev = { high: 3, medium: 2, low: 1 };
+                    return sev[b.severity] - sev[a.severity];
+                });
+
+                if (active) setNotifications(out.slice(0, 20));
+            } catch (err) {
+                console.error("Failed to generate notifications:", err);
+                if (active) setNotifications([]);
+            }
+        };
+
+        buildNotifications();
+        const interval = setInterval(buildNotifications, 60000);
+
+        return () => {
+            active = false;
+            clearInterval(interval);
         };
     }, []);
 
@@ -123,11 +247,12 @@ const Navbar: React.FC = () => {
     const handleLogout = () => {
         setLoading(true);
         localStorage.removeItem("user");
+        userStore.setUser(null);
         setLoading(false);
         setUser(null);
+        setSelectedDropdownKeys({});
         setIsLogoutModalVisible(false);
-        navigate("/home");
-        window.location.reload();
+        navigate("/home", { replace: true });
     };
 
     const handleDropdownSelect = (menuLabel: string, subItem: any) => {
@@ -188,6 +313,27 @@ const Navbar: React.FC = () => {
                 Logout
             </Menu.Item>
         </Menu>
+    );
+
+    const notificationMenu = (
+        <div className="notification-menu">
+            <div className="notification-menu-header">Notifications</div>
+            {!notifications.length ? (
+                <div className="notification-empty">No alerts right now.</div>
+            ) : (
+                <div className="notification-list">
+                    {notifications.map((n) => (
+                        <div key={n.id} className={`notification-item ${n.severity}`}>
+                            <div className="notification-title-row">
+                                <span className="notification-title">{n.title}</span>
+                                <span className="notification-date">{n.date}</span>
+                            </div>
+                            <div className="notification-message">{n.message}</div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
     );
 
     return (
@@ -277,11 +423,13 @@ const Navbar: React.FC = () => {
                             ))}
 
                     </div>
-                    <span className="notification-icon-wrapper">
-                        <Badge count={5} size="small" offset={[-2, 4]}>
-                            <BellOutlined className="bell-icon" />
-                        </Badge>
-                    </span>
+                    <Dropdown overlay={notificationMenu} trigger={["click"]} placement="bottomRight">
+                        <span className="notification-icon-wrapper">
+                            <Badge count={notifications.length} size="small" offset={[-2, 4]}>
+                                <BellOutlined className="bell-icon" />
+                            </Badge>
+                        </span>
+                    </Dropdown>
                     {user ? (
                         <Dropdown overlay={profileMenu}>
                             <Button

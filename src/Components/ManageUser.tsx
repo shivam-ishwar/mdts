@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "../styles/user-management.css";
 import { Button, Form, Input, Modal, Select, Switch, Table, Tooltip } from "antd";
-import { ExclamationCircleOutlined, UserAddOutlined } from "@ant-design/icons";
+import { ExclamationCircleOutlined, UploadOutlined, UserAddOutlined } from "@ant-design/icons";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { db } from "../Utils/dataStorege.ts";
 import { ToastContainer } from "react-toastify";
@@ -62,6 +62,9 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
   const [openRACIModal, setOpenRACIModal] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
+  const [bulkImportModalVisible, setBulkImportModalVisible] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
+  const [bulkResult, setBulkResult] = useState<{ ok: number; skipped: number; failed: number } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<any>({});
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -263,6 +266,126 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
     },
   ];
 
+  const ensureArray = (v: any) => (Array.isArray(v) ? v : v ? [v] : []);
+  const safeJsonParse = (text: string) => {
+    const t = (text || "").trim();
+    if (!t) return null;
+    return JSON.parse(t);
+  };
+  const normalizeText = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  const normalizeMobile = (v: any) => {
+    const raw = String(v ?? "").trim();
+    if (!raw) return "N/A";
+    const digits = raw.replace(/[^\d]/g, "");
+    return raw.startsWith("+") ? raw : digits ? `+${digits}` : raw;
+  };
+
+  const sanitizeUserForSave = (raw: any, cu: any, company: any) => {
+    const name = String(raw?.name ?? raw?.employeeFullName ?? raw?.fullName ?? "").trim();
+    const email = String(raw?.email ?? raw?.emails ?? "").trim().toLowerCase();
+    const roleRaw = String(raw?.role ?? raw?.permissionProfile ?? "employee").toLowerCase();
+    const allowedRoles = ["admin", "manager", "employee"];
+    const role = allowedRoles.includes(roleRaw) ? roleRaw : "employee";
+    const guiId = raw?.guiId ?? uuidv4();
+
+    return {
+      id: Date.now() + Math.floor(Math.random() * 100000),
+      guiId,
+      name,
+      email,
+      mobile: normalizeMobile(raw?.mobile),
+      whatsapp: normalizeMobile(raw?.whatsapp ?? raw?.mobile),
+      designation: String(raw?.designation ?? "N/A"),
+      registeredOn: new Date().toISOString(),
+      profilePhoto: "",
+      password: raw?.password ?? "Simpro@123",
+      isTempPassword: raw?.isTempPassword ?? true,
+      role,
+      orgId: cu?.orgId || null,
+      addedBy: cu?.guiId,
+      userType: "IND",
+      company: company?.name ?? cu?.company ?? "",
+      industryType: company?.industryType || "",
+      companyType: company?.companyType || "",
+      city: company?.city || "",
+      state: company?.state || "",
+      country: company?.country || "",
+      zipCode: company?.zipCode || "",
+      address: company?.address || "",
+    };
+  };
+
+  const handleBulkImportMembers = async () => {
+    try {
+      const cu = getCurrentUser();
+      if (!cu?.orgId) {
+        notify.error("User/org not loaded");
+        return;
+      }
+
+      const parsed = safeJsonParse(bulkJson);
+      if (!parsed) {
+        notify.error("Paste valid JSON");
+        return;
+      }
+
+      const company = await db.getCompanyByGuiId(cu.orgId);
+      const rawUsers = ensureArray(parsed);
+      const existing = (await db.getUsers()).filter((u: any) => String(u?.orgId ?? "") === String(cu.orgId));
+
+      let ok = 0;
+      let skipped = 0;
+      let failed = 0;
+      const toInsert: any[] = [];
+
+      for (const raw of rawUsers) {
+        try {
+          const user = sanitizeUserForSave(raw, cu, company);
+          if (!user.name || !user.email) {
+            failed += 1;
+            continue;
+          }
+
+          const dupExisting = existing.some((u: any) => normalizeText(u.email) === normalizeText(user.email));
+          const dupBatch = toInsert.some((u: any) => normalizeText(u.email) === normalizeText(user.email));
+          if (dupExisting || dupBatch) {
+            skipped += 1;
+            continue;
+          }
+
+          toInsert.push(user);
+          ok += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      if (!toInsert.length) {
+        setBulkResult({ ok: 0, skipped, failed });
+        notify.warning("Nothing to import");
+        return;
+      }
+
+      await db.users.bulkAdd(toInsert);
+
+      if (company) {
+        const updatedCompany = {
+          ...company,
+          userGuiIds: Array.from(new Set([...(company.userGuiIds || []), ...toInsert.map((u: any) => u.guiId)])),
+        };
+        await db.updateCompany(company.id, updatedCompany);
+      }
+
+      const allUsers = (await db.getUsers()).filter((u: any) => u.orgId == cu?.orgId);
+      setUsers(allUsers);
+      setBulkResult({ ok, skipped, failed });
+      notify.success(`Imported ${ok} member(s). Skipped ${skipped}. Failed ${failed}.`);
+    } catch (e: any) {
+      console.error(e);
+      notify.error(e?.message || "Bulk member import failed");
+    }
+  };
+
   return (
     <>
       <div className="page-container">
@@ -270,21 +393,34 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
           <div className="user-profile-heading-inner">
             <div>
               <p className="page-heading-title">{options?.title || "RACI, Alert & Notification"}</p>
-              <span className="pl-subtitle">Manage your org projects and ownership</span>
+              <span className="pl-subtitle">Manage team members, roles, and organization access</span>
             </div>
 
             {options?.isAddMember && (
-              <Tooltip title="Add new member">
-                <Button
-                  icon={<UserAddOutlined />}
-                  style={{ fontSize: 14, textTransform: "none" }}
-                  size="small"
-                  onClick={() => setAddMemberModalVisible(true)}
-                  className="add-member-button bg-secondary add-doc-btn"
-                >
-                  Add Member
-                </Button>
-              </Tooltip>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Tooltip title="Import members from JSON">
+                  <Button
+                    icon={<UploadOutlined />}
+                    style={{ fontSize: 14, textTransform: "none",display:"none"}}
+                    size="small"
+                    onClick={() => setBulkImportModalVisible(true)}
+                    className="add-member-button"
+                  >
+                    Import JSON
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Add new member">
+                  <Button
+                    icon={<UserAddOutlined />}
+                    style={{ fontSize: 14, textTransform: "none" }}
+                    size="small"
+                    onClick={() => setAddMemberModalVisible(true)}
+                    className="add-member-button bg-secondary add-doc-btn"
+                  >
+                    Add Member
+                  </Button>
+                </Tooltip>
+              </div>
             )}
           </div>
         </div>
@@ -382,6 +518,52 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
               </table>
             </div>
           )}
+        </Modal>
+
+        <Modal
+          title="Bulk Import Team Members (Paste JSON)"
+          open={bulkImportModalVisible}
+          onCancel={() => setBulkImportModalVisible(false)}
+          onOk={handleBulkImportMembers}
+          okText="Import & Save"
+          cancelText="Cancel"
+          okButtonProps={{ className: "bg-secondary" }}
+          cancelButtonProps={{ className: "bg-tertiary" }}
+          width="70%"
+          className="modal-container"
+        >
+          <div style={{ padding: "0px 10px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12, opacity: 0.75 }}>
+              Paste an array of users or a single user object. Supported fields: name/fullName, email, mobile, designation, role.
+            </div>
+            <Input.TextArea
+              value={bulkJson}
+              onChange={(e) => setBulkJson(e.target.value)}
+              rows={12}
+              placeholder={`[
+  {
+    "name": "Aarav Mehta",
+    "email": "aarav.mehta@simproglobal.com",
+    "mobile": "+919876543210",
+    "designation": "Mining Engineer",
+    "role": "manager"
+  },
+  {
+    "fullName": "Nisha Verma",
+    "emails": "nisha.verma@simproglobal.com",
+    "mobile": "9876543211",
+    "designation": "Geologist",
+    "permissionProfile": "employee"
+  }
+]`}
+              style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+            />
+            {bulkResult && (
+              <div style={{ fontSize: 12 }}>
+                Imported: <b>{bulkResult.ok}</b> • Skipped (duplicates): <b>{bulkResult.skipped}</b> • Failed: <b>{bulkResult.failed}</b>
+              </div>
+            )}
+          </div>
         </Modal>
 
         <Modal

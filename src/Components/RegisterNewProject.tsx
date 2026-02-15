@@ -59,6 +59,9 @@ export const RegisterNewProject: React.FC = () => {
   const [contractualDocuments, setContractualDocuments] = useState<DocumentData[]>([]);
   const [isUploadDisabled, setIsUploadDisabled] = useState(true);
   const [projectTimeline, setProjectTimeline] = useState<any[]>([]);
+  const [openBulkImportProjects, setOpenBulkImportProjects] = useState(false);
+  const [bulkProjectJson, setBulkProjectJson] = useState("");
+  const [bulkProjectResult, setBulkProjectResult] = useState<{ ok: number; skipped: number; failed: number } | null>(null);
   // const requiredFields: { [key: number]: string[] } = {
   //   1: ["companyName", "projectName", "mineral", "typeOfMine", "reserve", "netGeologicalReserve", "extractableReserve", "grade", "stripRatio", "peakCapacity", "mineLife", "totalCoalBlockArea"],
   //   2: ["state", "district", "nearestTown", "nearestAirport", "nearestRailwayStation"],
@@ -94,8 +97,6 @@ export const RegisterNewProject: React.FC = () => {
         project.contractualDetails,
         project.financialParameters || {},
       ]);
-      console.log(project);
-
       setFormData(project.projectParameters);
     }
   };
@@ -111,8 +112,6 @@ export const RegisterNewProject: React.FC = () => {
             project.contractualDetails || {},
             project.financialParameters || {},
           ];
-          console.log(stepsData);
-
           setFormStepsData(stepsData);
           setFormData(project);
           setProjectTimeline(project.projectTimeline || []);
@@ -912,13 +911,181 @@ export const RegisterNewProject: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const normalizeText = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  const ensureArray = (v: any) => (Array.isArray(v) ? v : v ? [v] : []);
+  const safeJsonParse = (text: string) => {
+    const t = (text || "").trim();
+    if (!t) return null;
+    return JSON.parse(t);
+  };
+
+  const toIsoDate = (val: any) => {
+    if (!val) return null;
+    if (typeof val === "string") {
+      const trimmed = val.trim();
+      if (!trimmed) return null;
+      const d = dayjs(trimmed);
+      if (d.isValid()) return d.toISOString();
+      const formats = ["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY", "YYYY/MM/DD"];
+      for (const fmt of formats) {
+        const parsed = dayjs(trimmed, fmt, true);
+        if (parsed.isValid()) return parsed.toISOString();
+      }
+      return null;
+    }
+    const d = dayjs(val);
+    return d.isValid() ? d.toISOString() : null;
+  };
+
+  const sanitizeDocument = (d: any, idx: number): DocumentData => {
+    if (typeof d === "string") {
+      const name = d.trim() || `Document ${idx + 1}`;
+      return {
+        id: uuidv4(),
+        documentName: name,
+        files: [],
+        uploadedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      id: d?.id ?? uuidv4(),
+      documentName: String(d?.documentName ?? d?.name ?? d?.title ?? `Document ${idx + 1}`).trim(),
+      files: ensureArray(d?.files),
+      uploadedAt: toIsoDate(d?.uploadedAt) || new Date().toISOString(),
+    };
+  };
+
+  const sanitizeProjectForSave = (raw: any, user: any) => {
+    const nowIso = new Date().toISOString();
+
+    const projectParameters = {
+      companyName: String(raw?.projectParameters?.companyName ?? raw?.companyName ?? user?.company ?? "").trim(),
+      projectName: String(raw?.projectParameters?.projectName ?? raw?.projectName ?? raw?.name ?? "").trim(),
+      reserve: String(raw?.projectParameters?.reserve ?? raw?.reserve ?? ""),
+      netGeologicalReserve: String(raw?.projectParameters?.netGeologicalReserve ?? raw?.netGeologicalReserve ?? ""),
+      extractableReserve: String(raw?.projectParameters?.extractableReserve ?? raw?.extractableReserve ?? ""),
+      stripRatio: String(raw?.projectParameters?.stripRatio ?? raw?.stripRatio ?? ""),
+      peakCapacity: String(raw?.projectParameters?.peakCapacity ?? raw?.peakCapacity ?? ""),
+      mineLife: String(raw?.projectParameters?.mineLife ?? raw?.mineLife ?? ""),
+      totalCoalBlockArea: String(raw?.projectParameters?.totalCoalBlockArea ?? raw?.totalCoalBlockArea ?? ""),
+      mineral: String(raw?.projectParameters?.mineral ?? raw?.mineral ?? ""),
+      typeOfMine: String(raw?.projectParameters?.typeOfMine ?? raw?.typeOfMine ?? ""),
+      grade: String(raw?.projectParameters?.grade ?? raw?.grade ?? ""),
+    };
+
+    const locations = {
+      mineLocation: String(raw?.locations?.mineLocation ?? raw?.mineLocation ?? ""),
+      state: String(raw?.locations?.state ?? raw?.state ?? ""),
+      district: String(raw?.locations?.district ?? raw?.district ?? ""),
+      nearestTown: String(raw?.locations?.nearestTown ?? raw?.nearestTown ?? ""),
+      nearestAirport: String(raw?.locations?.nearestAirport ?? raw?.nearestAirport ?? ""),
+      nearestRailwayStation: String(raw?.locations?.nearestRailwayStation ?? raw?.nearestRailwayStation ?? ""),
+    };
+
+    const contractualDetails = {
+      mineOwner: String(raw?.contractualDetails?.mineOwner ?? raw?.mineOwner ?? ""),
+      dateOfH1Bidder: toIsoDate(raw?.contractualDetails?.dateOfH1Bidder ?? raw?.dateOfH1Bidder),
+      cbdpaDate: toIsoDate(raw?.contractualDetails?.cbdpaDate ?? raw?.cbdpaDate),
+      vestingOrderDate: toIsoDate(raw?.contractualDetails?.vestingOrderDate ?? raw?.vestingOrderDate),
+      pbgAmount: String(raw?.contractualDetails?.pbgAmount ?? raw?.pbgAmount ?? ""),
+    };
+
+    const financialParameters = {
+      totalProjectCost: String(raw?.financialParameters?.totalProjectCost ?? raw?.totalProjectCost ?? ""),
+      ebitdaPercentage: String(raw?.financialParameters?.ebitdaPercentage ?? raw?.ebitdaPercentage ?? ""),
+      irrPercentage: String(raw?.financialParameters?.irrPercentage ?? raw?.irrPercentage ?? ""),
+      npvPercentage: String(raw?.financialParameters?.npvPercentage ?? raw?.npvPercentage ?? ""),
+      patPercentage: String(raw?.financialParameters?.patPercentage ?? raw?.patPercentage ?? ""),
+      patPerTon: String(raw?.financialParameters?.patPerTon ?? raw?.patPerTon ?? ""),
+      roePercentage: String(raw?.financialParameters?.roePercentage ?? raw?.roePercentage ?? ""),
+      rocePercentage: String(raw?.financialParameters?.rocePercentage ?? raw?.rocePercentage ?? ""),
+    };
+
+    return {
+      projectParameters,
+      locations,
+      contractualDetails,
+      financialParameters,
+      initialStatus: raw?.initialStatus ?? { library: "", items: [] },
+      documents: ensureArray(raw?.documents).map((doc: any, idx: number) => sanitizeDocument(doc, idx)),
+      userGuiId: raw?.userGuiId ?? user?.guiId,
+      orgId: raw?.orgId ?? user?.orgId,
+      createdAt: raw?.createdAt ?? nowIso,
+      updatedAt: nowIso,
+    };
+  };
+
+  const isDupProjectForBulk = (project: any, existing: any[]) => {
+    const targetName = normalizeText(project?.projectParameters?.projectName);
+    if (!targetName) return false;
+    return existing.some((x: any) =>
+      normalizeText(x?.projectParameters?.projectName) === targetName &&
+      String(x?.orgId ?? "") === String(project?.orgId ?? "")
+    );
+  };
+
+  const handleBulkProjectImport = async () => {
+    try {
+      if (!currentUser?.orgId) {
+        notify.error("User/org not loaded");
+        return;
+      }
+
+      const parsed = safeJsonParse(bulkProjectJson);
+      if (!parsed) {
+        notify.error("Paste valid JSON");
+        return;
+      }
+
+      const rawProjects = ensureArray(parsed);
+      const existing = await db.getProjects();
+      const scopedExisting = (existing || []).filter((p: any) => String(p?.orgId ?? "") === String(currentUser.orgId));
+
+      let ok = 0;
+      let skipped = 0;
+      let failed = 0;
+      const toInsert: any[] = [];
+
+      for (const raw of rawProjects) {
+        try {
+          const project = sanitizeProjectForSave(raw, currentUser);
+          if (!project?.projectParameters?.projectName) {
+            failed += 1;
+            continue;
+          }
+          if (isDupProjectForBulk(project, scopedExisting) || isDupProjectForBulk(project, toInsert)) {
+            skipped += 1;
+            continue;
+          }
+          toInsert.push(project);
+          ok += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      if (!toInsert.length) {
+        setBulkProjectResult({ ok: 0, skipped, failed });
+        notify.warning("Nothing to import");
+        return;
+      }
+
+      await db.projects.bulkAdd(toInsert);
+      setBulkProjectResult({ ok, skipped, failed });
+      notify.success(`Imported ${ok} project(s). Skipped ${skipped}. Failed ${failed}.`);
+    } catch (e: any) {
+      notify.error(e?.message || "Bulk project import failed");
+    }
+  };
+
   return (
     <>
       <div className="registration-container">
         <div className="registration-left">
           <div className="registration-page-heading">
             <p className="page-heading-title">Register New Project</p>
-            <span className="pl-subtitle">Manage your org projects and ownership</span>
+            <span className="pl-subtitle">Create and configure a new project with core parameters</span>
           </div>
 
           <div className="step-registration-form">
@@ -961,6 +1128,17 @@ export const RegisterNewProject: React.FC = () => {
                   </Button>
 
                   <div style={{ display: "flex", gap: "10px" }}>
+                    {!isEditMode && (
+                      <Button
+                        type="default"
+                        icon={<UploadOutlined />}
+                        onClick={() => setOpenBulkImportProjects(true)}
+                        style={{display:"none"}}
+                      >
+                        Import JSON
+                      </Button>
+                    )}
+
                     {isEditMode && (
                       <Button
                         type="default"
@@ -1101,6 +1279,61 @@ export const RegisterNewProject: React.FC = () => {
         </div>
       </div>
 
+
+      <Modal
+        title="Bulk Import Projects (Paste JSON)"
+        open={openBulkImportProjects}
+        onCancel={() => setOpenBulkImportProjects(false)}
+        onOk={handleBulkProjectImport}
+        okText="Import & Save"
+        cancelText="Cancel"
+        okButtonProps={{ className: "bg-secondary" }}
+        cancelButtonProps={{ className: "bg-tertiary" }}
+        maskClosable={false}
+        keyboard={false}
+        width={"70%"}
+        className="modal-container"
+      >
+        <div style={{ padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontSize: 12, opacity: 0.75 }}>
+            Paste an array of projects or a single project object. You can use either nested sections
+            (projectParameters, locations, contractualDetails, financialParameters) or flat fields.
+          </div>
+
+          <Input.TextArea
+            value={bulkProjectJson}
+            onChange={(e) => setBulkProjectJson(e.target.value)}
+            placeholder={`[
+  {
+    "projectName": "Ramp-Up Project A",
+    "companyName": "Simpro Global",
+    "typeOfMine": "OC",
+    "mineral": "Coal",
+    "grade": "Grade A",
+    "state": "Jharkhand",
+    "district": "Ranchi",
+    "mineOwner": "Simpro Mining Pvt Ltd",
+    "dateOfH1Bidder": "2025-01-10",
+    "pbgAmount": "5000000",
+    "totalProjectCost": "120000000",
+    "ebitdaPercentage": "18",
+    "irrPercentage": "14",
+    "documents": [
+      { "documentName": "LoA Document", "uploadedAt": "2025-01-12T10:00:00Z" }
+    ]
+  }
+]`}
+            rows={14}
+            style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+          />
+
+          {bulkProjectResult && (
+            <div style={{ fontSize: 12 }}>
+              Imported: <b>{bulkProjectResult.ok}</b> • Skipped (duplicates): <b>{bulkProjectResult.skipped}</b> • Failed: <b>{bulkProjectResult.failed}</b>
+            </div>
+          )}
+        </div>
+      </Modal>
 
       <Modal
         title={isEditMode ? "Confirm Update" : "Confirm Submission"}
