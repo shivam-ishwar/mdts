@@ -547,7 +547,7 @@ const Projects = () => {
                 ) : (
                     <section className="project-info">
                         <div className="base-details">
-                            <div className="">
+                            <div className="project-tabs-row">
                                 {tabs.map((tab) => (
                                     <button
                                         key={tab.key}

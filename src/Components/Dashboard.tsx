@@ -44,9 +44,34 @@ type Row = {
 
 const dayMs = 24 * 60 * 60 * 1000;
 
+const toLocalMidnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
 const parseDate = (s: string) => {
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? new Date(s + "T00:00:00") : d;
+  const str = String(s || "").trim();
+
+  const dmY = /^(\d{2})-(\d{2})-(\d{4})$/;
+  const m = str.match(dmY);
+  if (m) {
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    const yyyy = Number(m[3]);
+    return new Date(yyyy, mm - 1, dd);
+  }
+
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
+  const y = str.match(ymd);
+  if (y) {
+    const yyyy = Number(y[1]);
+    const mm = Number(y[2]);
+    const dd = Number(y[3]);
+    return new Date(yyyy, mm - 1, dd);
+  }
+
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) return toLocalMidnight(d);
+
+  const d2 = new Date(str + "T00:00:00");
+  return isNaN(d2.getTime()) ? new Date(NaN) : toLocalMidnight(d2);
 };
 
 const toDay = (d: Date) => Math.floor(d.getTime() / dayMs);
@@ -55,12 +80,16 @@ const diffDays = (a: Date, b: Date) => toDay(a) - toDay(b);
 
 const clampNonNeg = (n: number) => (n < 0 ? 0 : n);
 
+const formatDateFromDate = (d: Date) => {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+};
+
 const formatDate = (s: string) => {
   const d = parseDate(s);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return formatDateFromDate(d);
 };
 
 const Dashboard = () => {
@@ -248,9 +277,17 @@ const Dashboard = () => {
     const row: Row = payload[0].payload;
 
     const delayLabel =
-      row.delayDays > 0 ? `+${row.delayDays}d delayed` : row.delayDays < 0 ? `${row.delayDays}d ahead` : "On time";
+      row.delayDays > 0
+        ? `Finished ${row.delayDays} day(s) late`
+        : row.delayDays < 0
+          ? `Finished ${Math.abs(row.delayDays)} day(s) early`
+          : "On time";
     const startSlipLabel =
-      row.startSlipDays > 0 ? `+${row.startSlipDays}d start slip` : row.startSlipDays < 0 ? `${row.startSlipDays}d early start` : "Start on time";
+      row.startSlipDays > 0
+        ? `Started ${row.startSlipDays} day(s) late`
+        : row.startSlipDays < 0
+          ? `Started ${Math.abs(row.startSlipDays)} day(s) early`
+          : "On time";
 
     const boxStyle: React.CSSProperties = {
       background: "rgba(255,255,255,0.96)",
@@ -327,7 +364,7 @@ const Dashboard = () => {
         <div>
           <h2 style={titleStyle}>Project Timeline (Gantt)</h2>
           <p style={subtitleStyle}>
-            Baseline vs Actual • {formatDate(projectStart.toISOString().slice(0, 10))} → {formatDate(projectEnd.toISOString().slice(0, 10))} • Total {totalDays} days
+            Baseline vs Actual • {formatDateFromDate(projectStart)} → {formatDateFromDate(projectEnd)} • Total {totalDays} days
           </p>
         </div>
         <div style={{ fontSize: 12, opacity: 0.75 }}>

@@ -49,11 +49,10 @@
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    border: 1px solid var(--pt-border);
-    border-radius: var(--pt-radius-lg);
+    border-bottom: 1px solid var(--pt-border);
     background: var(--pt-surface);
     box-shadow: var(--pt-shadow);
-    width: 60.9%;
+    width: 100%;
 }
 
 .project-timeline-main .project-timeline-status-toolbar .project-timeline-select-item {
@@ -166,6 +165,9 @@
 
 .project-timeline-main .project-timeline-status-update-item {
     margin-top: 10px;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .project-timeline-main .project-timeline-table-container {
@@ -614,7 +616,41 @@
 }
 
 .project-timeline-table-scroll {
-  max-width: 60.9%;
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
+
+/* .project-timeline-table-scroll .project-timeline-table.ant-table-wrapper {
+  min-width: 1100px;
+} */
+
+.project-timeline-table-scroll .project-timeline-table .ant-table-content {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+/* .project-timeline-table-scroll .project-timeline-table .ant-table-content > table {
+  min-width: 1100px;
+} */
+
+.project-timeline-main .project-timeline-page-table.ant-table-wrapper .ant-table {
+  table-layout: auto !important;
+}
+
+.project-timeline-main .project-timeline-page-table .ant-table-container {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+.project-timeline-main .project-timeline-page-table .ant-table-content {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+}
+
+/* .project-timeline-main .project-timeline-page-table .ant-table-content > table {
+  min-width: 1100px !important;
+  width: max-content !important;
+} */

@@ -1,23 +1,47 @@
 .project-container {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(240px, 20%) minmax(0, 80%);
+    align-items: start;
+    width: 98.5%;
+    max-width: 98.5%;
+    min-width: 0;
+    gap: 12px;
     overflow-x: hidden !important;
+    box-sizing: border-box;
+    margin: 10px;
+}
+
+.project-container * {
+    box-sizing: border-box;
 }
 
 .pppsdd {
-    width: 20%;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.project-info {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .all-project-details {
-    height: calc(100vh - 155px);
+    height: calc(100vh - 148px);
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    margin: 10px 0 10px 10px;
     overflow-y: auto;
     overflow-x: hidden;
     position: relative;
     background: var(--bg-surface);
     box-shadow: var(--shadow-sm);
+    box-sizing: border-box;
+    margin-bottom: 8px;
+    padding-bottom: 0px;
 }
 
 .project-item {
@@ -137,11 +161,6 @@
     visibility: visible;
 }
 
-.project-info {
-    width: 80%;
-    margin: 10px;
-}
-
 .base-details {
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
@@ -167,11 +186,26 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     background: var(--bg-surface);
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
 }
 
 .tab-content {
     height: calc(100vh - 175px);
     overflow-y: auto;
+    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.info-item,
+.tab-container,
+.tab-content>* {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .heading {
@@ -239,13 +273,12 @@
     font-weight: 700;
 }
 
-@media (max-width: 768px) {
-
-    .all-project-details,
-    .project-info {
-        width: 100%;
-        height: auto;
-    }
+.project-tabs-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
 }
 
 .animated-item {
@@ -381,7 +414,7 @@
 
 .create-project-btn-div {
     border: 1px solid var(--border);
-    margin-left: 10px;
+    margin: 0;
     border-radius: var(--radius-sm);
     padding: 4px;
     cursor: pointer;
@@ -399,8 +432,36 @@
 .tab-active {
     outline: 1.5px solid rgba(31, 122, 99, 0.6);
 }
-.project-info {
-  width: 80%;
-  margin: 10px;
-  min-width: 0; /* VERY IMPORTANT in flex layouts */
+
+.project-container>.people-search-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 10px 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+    .project-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pppsdd,
+    .project-info,
+    .project-container>.people-search-container {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .all-project-details,
+    .project-info,
+    .project-container>.people-search-container {
+        margin: 10px 0;
+        height: auto;
+    }
+
+    .tab-content {
+        height: auto;
+        max-height: none;
+    }
 }

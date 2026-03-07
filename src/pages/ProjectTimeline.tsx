@@ -51,7 +51,6 @@ const tabs = [
     "Can be started with in a week"
 ];
 const ProjectTimeline = (project: any) => {
-
     const navigate = useNavigate();
     const [expandedKeys, setExpandedKeys] = useState<any>([]);
     const [allProjects, setAllProjects] = useState<any>([]);
@@ -588,6 +587,7 @@ const ProjectTimeline = (project: any) => {
     ];
 
     const finalColumns: ColumnsType = isEditing ? [...baseColumns, ...editingColumns] : baseColumns;
+    const tableScrollX = isEditing ? 2100 : 1400;
 
     const getProjectTimelineById = (id: any) => {
         const data = selectedProject.projectTimeline.filter((item: any) => item.timelineId == id);
@@ -1002,54 +1002,30 @@ const ProjectTimeline = (project: any) => {
                                 </Space>
                             </div>
                         </div>
-
-                        <hr />
-
                         <div className="project-timeline-status-update-item">
-                            <div className="project-timeline-table-scroll">
-                                {/* <Table
-                                    columns={finalColumns}
-                                    dataSource={filteredDataSource}
-                                    className="project-timeline-table"
-                                    pagination={false}
-                                    expandable={{
-                                        expandedRowRender: () => null,
-                                        rowExpandable: (record) => record.children?.length > 0,
-                                        expandedRowKeys: expandedKeys,
-                                        onExpand: (expanded, record) => {
-                                            setExpandedKeys(
-                                                expanded ? [...expandedKeys, record.key] : expandedKeys.filter((key: any) => key !== record.key)
-                                            );
-                                        },
-                                        expandIconColumnIndex: 0,
-                                    }}
-                                    scroll={{ x: "max-content" }}
-                                    rowClassName={(record) => (record.isModule ? "module-header" : "activity-row")}
-                                    bordered
-                                    
-                                /> */}
-                                <Table
-                                    columns={finalColumns}
-                                    dataSource={filteredDataSource}
-                                    className="project-timeline-table"
-                                    pagination={false}
-                                    scroll={{ x: 1000 }}
-                                    tableLayout="fixed"
-                                    expandable={{
-                                        expandedRowRender: () => null,
-                                        rowExpandable: (record) => record.children?.length > 0,
-                                        expandedRowKeys: expandedKeys,
-                                        onExpand: (expanded, record) => {
-                                            setExpandedKeys(
-                                                expanded ? [...expandedKeys, record.key] : expandedKeys.filter((key: any) => key !== record.key)
-                                            );
-                                        },
-                                        expandIconColumnIndex: 0,
-                                    }}
-                                    rowClassName={(record) => (record.isModule ? "module-header" : "activity-row")}
-                                    bordered
-                                />
-
+                            <div className="project-timeline-table-container">
+                                <div className="project-timeline-table-scroll">
+                                    <Table
+                                        columns={finalColumns}
+                                        dataSource={filteredDataSource}
+                                        className="project-timeline-table project-timeline-page-table"
+                                        pagination={false}
+                                        scroll={{ x: tableScrollX }}
+                                        expandable={{
+                                            expandedRowRender: () => null,
+                                            rowExpandable: (record) => record.children?.length > 0,
+                                            expandedRowKeys: expandedKeys,
+                                            onExpand: (expanded, record) => {
+                                                setExpandedKeys(
+                                                    expanded ? [...expandedKeys, record.key] : expandedKeys.filter((key: any) => key !== record.key)
+                                                );
+                                            },
+                                            expandIconColumnIndex: 0,
+                                        }}
+                                        rowClassName={(record) => (record.isModule ? "module-header" : "activity-row")}
+                                        bordered
+                                    />
+                                </div>
                             </div>
                         </div>
                     </>

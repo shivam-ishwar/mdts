@@ -81,44 +81,23 @@ export const RegisterNewProject: React.FC = () => {
 
   const [isEditMode, setIsEditMode] = useState(false);
 
-  useEffect(() => {
-    if (id) {
-      setIsEditMode(true);
-      loadProjectData(id);
-    }
-  }, [id]);
-
   const loadProjectData = async (projectId: string) => {
     const project = await db.getProjectById(projectId);
     if (project) {
-      setFormStepsData([
-        project.projectParameters,
-        project.locations,
-        project.contractualDetails,
+      const stepsData = [
+        project.projectParameters || {},
+        project.locations || {},
+        project.contractualDetails || {},
         project.financialParameters || {},
-      ]);
-      setFormData(project.projectParameters);
+      ];
+
+      setFormStepsData(stepsData);
+      setFormData(stepsData[0] || {});
+      setProjectTimeline(project.projectTimeline || []);
+      setContractualDocuments(Array.isArray(project.documents) ? project.documents : []);
+      setCurrentStep(1);
     }
   };
-
-  useEffect(() => {
-    if (id) {
-      setIsEditMode(true);
-      db.getProjectById(id).then((project) => {
-        if (project) {
-          const stepsData = [
-            project.projectParameters || {},
-            project.locations || {},
-            project.contractualDetails || {},
-            project.financialParameters || {},
-          ];
-          setFormStepsData(stepsData);
-          setFormData(project);
-          setProjectTimeline(project.projectTimeline || []);
-        }
-      });
-    }
-  }, [id]);
 
 
   useEffect(() => {
@@ -268,8 +247,11 @@ export const RegisterNewProject: React.FC = () => {
       loadProjectData(id);
     } else {
       setIsEditMode(false);
+      setCurrentStep(1);
       setFormStepsData([]);
       clearFormData();
+      setProjectTimeline([]);
+      setContractualDocuments([]);
     }
   }, [id]);
 
