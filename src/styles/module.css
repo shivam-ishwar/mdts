@@ -38,6 +38,7 @@
   margin: 0;
   border-radius: 0;
   background: var(--bg-surface);
+  width: 300px;
 }
 
 .modules-data {

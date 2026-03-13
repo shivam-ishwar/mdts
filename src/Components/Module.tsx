@@ -12,6 +12,7 @@ import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUserId } from '../Utils/moduleStorage';
 import { RollbackOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
+import { regenerateCodes, indentActivity, outdentActivity, createActivity } from "../Utils/activityHierarchy";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { ToastContainer } from "react-toastify";
@@ -51,7 +52,7 @@ const Module = () => {
         level: "",
         mineType: mineType,
         duration: '',
-        activities: state?.activities || []
+        activities: regenerateCodes(parentModuleCode, state?.activities || [])
     });
     let isEditing = !!state;
     const [moduleType, setModuleType] = useState("PERSONAL");
@@ -105,11 +106,11 @@ const Module = () => {
                 level: state.level,
                 mineType: state.mineType,
                 duration: state.duration,
-                activities: state.activities
+                activities: regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || [])
             });
             setUndoStack([]);
             if (originalActivities.length === 0) {
-                setOriginalActivities(JSON.parse(JSON.stringify(state.activities)));
+                setOriginalActivities(JSON.parse(JSON.stringify(regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || []))));
             }
         } else {
             console.error("State or state.activities is not available.");
@@ -168,7 +169,7 @@ const Module = () => {
 
     useEffect(() => {
         if (isOriginalActivitiesStateStored === false) {
-            setOriginalActivities(JSON.parse(JSON.stringify(moduleData.activities)));
+            setOriginalActivities(JSON.parse(JSON.stringify(regenerateCodes(moduleData.parentModuleCode, moduleData.activities || []))));
             setIsOriginalActivitiesStateStored(true);
         }
         handleSortModule(sortOrder);
@@ -269,66 +270,76 @@ const Module = () => {
         }
     };
 
+    const getActivityId = (activity: any) =>
+        activity?.id ?? activity?.guicode ?? activity?.code;
+
+    const isModuleRow = (row: any) =>
+        !!row?.parentModuleCode && !row?.code;
+
+const applyPrerequisites = (activities: any[]) => {
+    const byId = new Map<string, any>();
+    const lastByParent = new Map<string | null, any>();
+
+    activities.forEach((activity: any) => {
+        const id = getActivityId(activity);
+        if (id) byId.set(id, activity);
+    });
+
+    return activities.map((activity: any) => {
+        const pid = activity.parentId ?? null;
+        const previousSibling = lastByParent.get(pid) ?? null;
+        const parentCode = pid ? byId.get(pid)?.code ?? null : null;
+        const prerequisiteCode = previousSibling?.code ?? parentCode ?? null;
+
+        const updated = {
+            ...activity,
+            prerequisite: prerequisiteCode,
+            prerequisite_activity_code: prerequisiteCode,
+        };
+
+        lastByParent.set(pid, updated);
+        return updated;
+    });
+};
+
+const setActivitiesWithRecalc = (activities: any[]) => {
+    const nextActivities = regenerateCodes(moduleData.parentModuleCode, activities || []);
+    const withPrereq = applyPrerequisites(nextActivities);
+    setModuleData((prev: any) => ({ ...prev, activities: withPrereq }));
+};
+
+
+    // const setActivitiesWithRecalc = (activities: any[]) => {
+    //     const nextActivities = regenerateCodes(moduleData.parentModuleCode, activities || []);
+    //     const withPrereq = applyPrerequisites(nextActivities);
+    //     setModuleData((prev: any) => ({ ...prev, activities: withPrereq }));
+    // };
+
     const addActivity = () => {
         pushToUndoStack(moduleData);
         if (!selectedRow) return;
 
-        const isModuleSelected = selectedRow.level === "L1";
-        const parentCode = isModuleSelected ? moduleData.parentModuleCode : selectedRow.code;
-        const newLevel = isModuleSelected ? "L2" : selectedRow.level;
-        const sameLevelActivities = moduleData.activities.filter((a: any) => a.level === newLevel);
-        const lastActivity = sameLevelActivities.length > 0 ? sameLevelActivities[sameLevelActivities.length - 1] : null;
-        const lastNumber = lastActivity ? parseInt(lastActivity.code.split('/').pop()) : 0;
-
-        const newNumber = isModuleSelected
-            ? (lastNumber ? lastNumber + 10 : 10)
-            : parseInt(selectedRow.code.split('/').pop()) + 10;
-
-        const newCode = isModuleSelected
-            ? `${moduleData.parentModuleCode}/${newNumber}`
-            : `${parentCode.split('/').slice(0, -1).join('/')}/${newNumber}`;
-
+        const isModuleSelected = isModuleRow(selectedRow);
+        const selectedId = getActivityId(selectedRow);
         const timestamp = new Date().toLocaleTimeString('en-GB');
-        const generatedId = uuidv4();
-        const newActivity = {
-            code: newCode,
-            activityName: "New Activity " + timestamp,
-            duration: 1,
-            guicode: generatedId,
-            prerequisite: isModuleSelected ? "" : selectedRow.code,
-            level: newLevel
-        };
+        const parentId = isModuleSelected
+            ? null
+            : moduleData.activities.find((a: any) => getActivityId(a) === selectedId)?.parentId ?? null;
 
-        const updatedActivities: any = [];
-        let inserted = false;
+        const created = createActivity(
+            moduleData.activities || [],
+            moduleData.parentModuleCode,
+            parentId,
+            isModuleSelected ? undefined : selectedId
+        );
 
-        moduleData.activities.forEach((activity: any) => {
-            if (activity.code === selectedRow.code) {
-                updatedActivities.push(activity);
-                updatedActivities.push(newActivity);
-                inserted = true;
-            } else if (inserted && activity.level === newLevel) {
-                const activityNumber = parseInt(activity.code.split('/').pop());
-                const updatedCode = activity.code.replace(`/${activityNumber}`, `/${activityNumber + 10}`);
-                updatedActivities.push({ ...activity, code: updatedCode });
-            } else {
-                updatedActivities.push(activity);
-            }
-        });
+        const updatedActivities = created.activities.map((activity: any) =>
+            getActivityId(activity) === created.id
+                ? { ...activity, activityName: "New Activity " + timestamp, duration: 1 }
+                : activity
+        );
 
-        if (isModuleSelected && !inserted) {
-            updatedActivities.push(newActivity);
-        }
-
-
-        setModuleData((prev: any) => {
-            const newData = { ...prev, activities: updatedActivities };
-            return newData;
-        });
-
-        setTimeout(() => {
-            handlePrerequisite();
-        }, 0);
+        setActivitiesWithRecalc(updatedActivities);
     };
 
     const deleteActivity = async () => {
@@ -364,207 +375,65 @@ const Module = () => {
             }
             else {
                 setModuleData((prev: any) => {
-                    let activities = [...prev.activities];
-                    let children = activities.filter(activity => activity.code.startsWith(selectedRow.code + "/"));
-
-                    children.forEach(child => {
-                        let newParentCode = selectedRow.prerequisite || "";
-                        let childParts = child.code.split("/");
-                        childParts[selectedRow.code.split("/").length - 1] = newParentCode.split("/").pop();
-                        child.code = newParentCode ? `${newParentCode}/${childParts.slice(-1)}` : childParts.slice(-1).join("/");
-                        child.prerequisite = newParentCode;
-                    });
-                    let updatedActivities = activities.filter(activity => activity.code !== selectedRow.code);
-                    let parentCode = selectedRow.code.split("/").slice(0, -1).join("/");
-                    let sameLevelActivities = updatedActivities.filter(activity =>
-                        activity.code.startsWith(parentCode) && activity.level === selectedRow.level
-                    );
-
-                    sameLevelActivities.sort((a, b) => parseInt(a.code.split("/").pop()) - parseInt(b.code.split("/").pop()));
-                    sameLevelActivities.forEach((activity, index) => {
-                        let newCode = `${parentCode}/${(index + 1) * 10}`;
-                        activity.code = newCode;
-                    });
+                    const list = regenerateCodes(moduleData.parentModuleCode, prev.activities || []);
+                    const selectedId = getActivityId(selectedRow);
+                    const selectedActivity = list.find((a) => getActivityId(a) === selectedId);
+                    const updatedActivities = list
+                        .filter((activity) => getActivityId(activity) !== selectedId)
+                        .map((activity) => {
+                            if (activity.parentId === selectedId) {
+                                return { ...activity, parentId: selectedActivity?.parentId ?? null };
+                            }
+                            return activity;
+                        });
 
                     return {
                         ...prev,
-                        activities: updatedActivities
+                        activities: applyPrerequisites(regenerateCodes(moduleData.parentModuleCode, updatedActivities))
                     };
                 });
 
                 setSelectedRow(null);
-                handlePrerequisite();
                 setIsDeleteModalVisible(false);
             }
         }
         setSelectedRow(null);
-        handlePrerequisite();
         setIsDeleteModalVisible(false);
     };
 
     const increaseLevel = () => {
         pushToUndoStack(moduleData);
-        if (!selectedRow || selectedRow.level === "L1") return;
-
-        setModuleData((prev: any) => {
-            let activities = [...prev.activities];
-            let activityIndex = activities.findIndex((a) => a.code === selectedRow.code);
-            if (activityIndex === -1) return prev;
-
-            let activity = activities[activityIndex];
-            let currentLevel = parseInt(activity.level.slice(1));
-
-            let aboveIndex = activityIndex - 1;
-            while (aboveIndex >= 0 && activities[aboveIndex].level !== activity.level) {
-                aboveIndex--;
-            }
-
-            if (aboveIndex < 0) return prev;
-            let aboveActivity = activities[aboveIndex];
-
-            let lastChildCode = aboveActivity.code;
-            let children = activities.filter((a) => a.code.startsWith(`${aboveActivity.code}/`));
-            if (children.length > 0) {
-                let lastChild = children[children.length - 1];
-                let lastChildParts = lastChild.code.split("/");
-                let lastChildNumber = parseInt(lastChildParts[lastChildParts.length - 1]);
-                lastChildCode = `${aboveActivity.code}/${lastChildNumber + 10}`;
-            } else {
-                lastChildCode = `${aboveActivity.code}/10`;
-            }
-
-            let newLevelValue = currentLevel + 1;
-
-            let updatedActivity = {
-                ...activity,
-                code: lastChildCode,
-                prerequisite: aboveActivity.code,
-                level: `L${newLevelValue}`,
-            };
-
-            let updatedActivities = [...activities];
-            updatedActivities[activityIndex] = updatedActivity;
-
-            let previousLevel = `L${currentLevel}`;
-            let siblings = updatedActivities.filter((a) => a.level === previousLevel && a.code !== activity.code);
-
-            if (siblings) {
-                let lastSiblingCode = aboveActivity.code;
-                let lastSiblingPrefix = removeLastSegment(lastSiblingCode);
-                let count = 10;
-
-                siblings.forEach((sibling) => {
-                    let newSiblingCode = `${lastSiblingPrefix}/${count}`;
-                    sibling.code = newSiblingCode;
-                    sibling.prerequisite = lastSiblingCode;
-                    count += 10;
-                    lastSiblingCode = newSiblingCode;
-                });
-            }
-
-            updatedActivities.sort((a, b) => {
-                let aParts = a.code.split("/").map(Number);
-                let bParts = b.code.split("/").map(Number);
-                for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-                    let aPart = aParts[i] || 0;
-                    let bPart = bParts[i] || 0;
-                    if (aPart !== bPart) return aPart - bPart;
-                }
-                return 0;
-            });
-
-            return { ...prev, activities: updatedActivities };
-        });
-        handlePrerequisite();
-    };
-
-    const removeLastSegment = (code: any) => {
-        let parts = code.split('/');
-        if (parts.length > 1) {
-            parts.pop();
-        }
-        return parts.join('/');
+        if (!selectedRow || isModuleRow(selectedRow)) return;
+        const selectedId = getActivityId(selectedRow);
+        if (!selectedId) return;
+        const updatedActivities = indentActivity(moduleData.activities || [], moduleData.parentModuleCode, selectedId);
+        setActivitiesWithRecalc(updatedActivities);
+        const nextSelected = updatedActivities.find((a: any) => getActivityId(a) === selectedId) || selectedRow;
+        setSelectedRow(nextSelected);
+        setSelectedActivityRow(nextSelected);
     };
 
     const decreaseLevel = () => {
         pushToUndoStack(moduleData);
-        if (!selectedRow || selectedRow.level === "L1" || selectedRow.level === "L2") return;
-
-        setModuleData((prev: any) => {
-            let activities = [...prev.activities];
-            let activityIndex = activities.findIndex((a) => a.code === selectedRow.code);
-            if (activityIndex === -1) return prev;
-
-            let activity = activities[activityIndex];
-            let currentLevel = parseInt(activity.level.slice(1));
-
-            let aboveIndex = activityIndex - 1;
-            let newParentCode = "";
-            while (aboveIndex >= 0) {
-                let aboveActivity = activities[aboveIndex];
-                let aboveLevel = parseInt(aboveActivity.level.slice(1));
-
-                if (aboveLevel < currentLevel) {
-                    newParentCode = aboveActivity.code;
-                    break;
-                }
-                aboveIndex--;
-            }
-
-            if (!newParentCode) return prev;
-
-            let splited = newParentCode.split("/");
-            let newNumber = parseInt(splited[splited.length - 1]) + 10;
-            let newCode = `${removeLastSegment(newParentCode)}/${newNumber}`;
-            let newLevel = `L${currentLevel - 1}`;
-            let updatedActivity = {
-                ...activity,
-                code: newCode,
-                prerequisite: newParentCode,
-                level: newLevel,
-            };
-
-            let updatedActivities = [...activities];
-            updatedActivities[activityIndex] = updatedActivity;
-
-            let siblings = updatedActivities.filter((a) => a.level === newLevel && a.code.startsWith(removeLastSegment(newCode)));
-            siblings.sort((a, b) => parseInt(a.code.split("/").pop()) - parseInt(b.code.split("/").pop()));
-
-            let count = 10;
-            siblings.forEach((sibling, index) => {
-                let newSiblingCode = `${removeLastSegment(newCode)}/${count}`;
-                sibling.code = newSiblingCode;
-                if (index > 0) {
-                    sibling.prerequisite = siblings[index - 1].code;
-                }
-                count += 10;
-            });
-
-            updatedActivities.sort((a, b) => {
-                let aParts = a.code.split("/").map(Number);
-                let bParts = b.code.split("/").map(Number);
-                for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
-                    let aPart = aParts[i] || 0;
-                    let bPart = bParts[i] || 0;
-                    if (aPart !== bPart) return aPart - bPart;
-                }
-                return 0;
-            });
-
-            return { ...prev, activities: updatedActivities };
-        });
-        handlePrerequisite();
+        if (!selectedRow || isModuleRow(selectedRow)) return;
+        const selectedId = getActivityId(selectedRow);
+        if (!selectedId) return;
+        const updatedActivities = outdentActivity(moduleData.activities || [], moduleData.parentModuleCode, selectedId);
+        setActivitiesWithRecalc(updatedActivities);
+        const nextSelected = updatedActivities.find((a: any) => getActivityId(a) === selectedId) || selectedRow;
+        setSelectedRow(nextSelected);
+        setSelectedActivityRow(nextSelected);
     };
 
     const handleEdit = (field: any, value: any) => {
         setModuleData((prev: any) => ({ ...prev, [field]: value }));
     };
 
-    const handleActivityEdit = (code: any, field: any, value: any) => {
+    const handleActivityEdit = (activityId: any, field: any, value: any) => {
         setModuleData((prev: any) => ({
             ...prev,
             activities: prev.activities.map((activity: any) =>
-                activity.code === code ? { ...activity, [field]: value } : activity
+                getActivityId(activity) === activityId ? { ...activity, [field]: value } : activity
             ),
         }));
     };
@@ -609,7 +478,7 @@ const Module = () => {
             ? JSON.parse(JSON.stringify(moduleData.activities))
             : [];
 
-        setModuleData({
+        const nextModuleData = {
             guiId: generatedId,
             parentModuleCode: moduleCodeName
                 ? moduleCodeName
@@ -617,12 +486,16 @@ const Module = () => {
             moduleName: newModelName,
             level: "L1",
             mineType: selectedOption,
-            activities: clonedActivities,
+            activities: regenerateCodes(moduleCodeName ? moduleCodeName : generateTwoLetterAcronym(newModelName, existingAcronyms), clonedActivities),
             userGuiId: currentUser?.guiId,
             orgId: currentUser?.orgId,
             createdAt: new Date().toISOString(),
             moduleType: moduleType
-        });
+        };
+
+        setModuleData(nextModuleData);
+        setSelectedRow(nextModuleData);
+        setSelectedActivityRow(null);
 
         setNewModelName("");
         setSelectedOption("");
@@ -688,42 +561,20 @@ const Module = () => {
 
     const getAllPrerequisites = () => {
         return moduleData.activities
-            .filter((activity: any) => activity.level !== "L1")
             .map((activity: any) => activity.code);
     };
 
     const handlePrerequisiteChange = (activityCode: any, value: any) => {
+        const byCode = new Map(moduleData.activities.map((a: any) => [a.code, a]));
+        const parent = byCode.get(value);
         const updatedActivities = moduleData.activities.map((activity: any) =>
-            activity.code === activityCode ? { ...activity, prerequisite: value } : activity
+            activity.code === activityCode ? { ...activity, parentId: parent ? getActivityId(parent) : null } : activity
         );
-        setModuleData((prev: any) => ({ ...prev, activities: updatedActivities }));
+        setActivitiesWithRecalc(updatedActivities);
     };
 
     const filterPrerequisites = (inputValue: string, option: any) => {
         return option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1;
-    };
-
-    const handlePrerequisite = () => {
-        setModuleData((prev: any) => {
-            let parentCode: string = "";
-            let firstIndex = 0;
-
-            const updatedActivities = prev.activities.map((activity: any, index: number) => {
-                if (firstIndex === 0) {
-                    firstIndex = 1;
-                    parentCode = activity.code;
-                    return { ...activity, prerequisite: "" };
-                } else if (activity.level === "L2") {
-                    parentCode = activity.code;
-                    return { ...activity, prerequisite: prev.activities[index - 1]?.code || "" };
-                } else if (activity.level !== "L1") {
-                    return { ...activity, prerequisite: parentCode };
-                }
-                return activity;
-            });
-
-            return { ...prev, activities: updatedActivities };
-        });
     };
 
     const handleCancelUpdateModule = () => {
@@ -754,7 +605,7 @@ const Module = () => {
             level: "",
             mineType: mineType,
             duration: '',
-            activities: state?.activities || []
+            activities: regenerateCodes(parentModuleCode, state?.activities || [])
         })
     }
 
@@ -785,9 +636,9 @@ const Module = () => {
         let sortedActivities;
 
         if (order === "asc") {
-            sortedActivities = [...moduleData.activities].sort((a, b) => a.level.localeCompare(b.level));
+            sortedActivities = [...moduleData.activities].sort((a, b) => (a.levelIndex || 1) - (b.levelIndex || 1));
         } else if (order === "desc") {
-            sortedActivities = [...moduleData.activities].sort((a, b) => b.level.localeCompare(a.level));
+            sortedActivities = [...moduleData.activities].sort((a, b) => (b.levelIndex || 1) - (a.levelIndex || 1));
         } else {
             if (originalActivities.length === 0) {
                 return;
@@ -1208,7 +1059,7 @@ const Module = () => {
         <div>
             <div className="module-main">
                 <div className="top-item" style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
-                    <div className="module-title" style={{ display: "flex", justifyContent: "space-between", gap: "50px", alignItems: "center" }}>
+                    <div className="module-title" style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "center" }}>
                         <div>
                             <p className="page-heading-title">Modules</p>
                             <span className="pl-subtitle">Create modules and activities with dependencies, costs, and alerts</span>
@@ -1492,8 +1343,8 @@ const Module = () => {
                                         moduleData.activities.map((activity: any, index: any, _sortedActivities: any) => (
                                             <TableRow
                                                 hover
-                                                key={activity.code}
-                                                selected={selectedRow?.code === activity.code}
+                                                key={getActivityId(activity) || activity.code}
+                                                selected={getActivityId(selectedRow) === getActivityId(activity)}
                                                 onClick={() => {
                                                     setSelectedRow(activity);
                                                     setSelectedActivityRow(activity);
@@ -1504,7 +1355,7 @@ const Module = () => {
                                                 <TableCell
                                                     contentEditable
                                                     suppressContentEditableWarning
-                                                    onBlur={(e) => handleActivityEdit(activity.code, 'activityName', e.target.innerText)}
+                                                    onBlur={(e) => handleActivityEdit(getActivityId(activity), 'activityName', e.target.innerText)}
                                                     sx={{ cursor: 'text', outline: 'none', padding: '10px' }}
                                                 >
                                                     {activity.activityName}
@@ -1512,7 +1363,7 @@ const Module = () => {
                                                 <TableCell
                                                     contentEditable
                                                     suppressContentEditableWarning
-                                                    onBlur={(e) => handleActivityEdit(activity.code, 'duration', e.target.innerText)}
+                                                    onBlur={(e) => handleActivityEdit(getActivityId(activity), 'duration', e.target.innerText)}
                                                     sx={{ cursor: 'text', outline: 'none', padding: '10px' }}
                                                 >
                                                     {activity.duration}
@@ -1528,11 +1379,11 @@ const Module = () => {
                                                         placeholder="Select Prerequisite"
                                                         style={{ width: '100%' }}
                                                         allowClear
-                                                        disabled={index === 0 && activity.level === 'L2'}
+                                                        disabled={!activity.parentId}
                                                     />
                                                 </TableCell>
 
-                                                <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{activity.level}</TableCell>
+                                                <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{`L${(activity.levelIndex || 1) + 1}`}</TableCell>
                                             </TableRow>
                                         ))}
                                 </TableBody>
@@ -1730,7 +1581,7 @@ const Module = () => {
                                                                     userGuiId: currentUser?.guiId,
                                                                     orgId: currentUser?.orgId,
                                                                     createdAt: new Date().toISOString(),
-                                                                    activities: clonedActivities,
+                                                                    activities: regenerateCodes(newModuleCode, clonedActivities),
                                                                 });
 
                                                                 notify.success("Module imported successfully");
@@ -1783,7 +1634,7 @@ const Module = () => {
                                                                     userGuiId: currentUser?.guiId,
                                                                     orgId: currentUser?.orgId,
                                                                     createdAt: new Date().toISOString(),
-                                                                    activities: clonedActivities,
+                                                                    activities: regenerateCodes(newModuleCode, clonedActivities),
                                                                 });
 
                                                                 notify.success("Module imported successfully");
