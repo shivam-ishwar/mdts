@@ -142,19 +142,6 @@ const toInputDate = (d: Date) => {
 
 const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
 
-const toArray = (v: any): string[] => {
-    if (!v) return [];
-    if (Array.isArray(v)) return v.map((x) => String(x)).filter(Boolean);
-    if (typeof v === "string") {
-        const s = v.trim();
-        if (!s) return [];
-        if (s.includes(",")) return s.split(",").map((x) => x.trim()).filter(Boolean);
-        if (s.includes(";")) return s.split(";").map((x) => x.trim()).filter(Boolean);
-        return [s];
-    }
-    return [String(v)].filter(Boolean);
-};
-
 const resolveGraphWindow = (range: GraphRangeKey, customFrom?: string, customTo?: string) => {
     const today = toLocalMidnight(new Date());
     const ytdStart = new Date(today.getFullYear(), 0, 1);

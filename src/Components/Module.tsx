@@ -1340,7 +1340,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                         <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{moduleData.level}</TableCell>
                                     </TableRow>
                                     {Array.isArray(moduleData.activities) &&
-                                        moduleData.activities.map((activity: any, index: any, _sortedActivities: any) => (
+                                        moduleData.activities.map((activity: any) => (
                                             <TableRow
                                                 hover
                                                 key={getActivityId(activity) || activity.code}

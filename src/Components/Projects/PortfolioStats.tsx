@@ -3,7 +3,6 @@ import {
     Bar,
     BarChart,
     CartesianGrid,
-    Cell,
     Legend,
     ResponsiveContainer,
     Tooltip,
@@ -336,10 +335,6 @@ const PortfolioStats = () => {
     }, [dateRange]);
 
     const chartHeight = Math.max(420, chartData.length * 64);
-    const legendPayload = [
-        { value: "Planned", type: "square", color: "#1d4ed8" },
-        { value: "Actual", type: "square", color: "#0ea5a6" },
-    ];
 
     if (state === "loading") {
         return (
@@ -470,7 +465,7 @@ const PortfolioStats = () => {
                                             );
                                         }}
                                     />
-                                    <Legend payload={legendPayload} />
+                                    <Legend />
                                     <Bar dataKey="plannedValue" name="Planned" barSize={18} fill="#1d4ed8" />
                                     <Bar dataKey="actualValue" name="Actual" barSize={18} fill="#0ea5a6" />
                                 </BarChart>
