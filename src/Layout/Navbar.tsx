@@ -160,6 +160,19 @@ const Navbar: React.FC = () => {
         setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: next.has(id) } : n)));
     };
 
+    const markAllRead = () => {
+        const currentUser = userStore.getUser();
+        const userKey = resolveUserKey(currentUser);
+        if (!currentUser?.orgId || !userKey || !notifications.length) return;
+        const next = new Set(readIds);
+        notifications.forEach((n) => {
+            next.add(n.id);
+            db.markNotificationRead(n.id, String(userKey), String(currentUser.orgId));
+        });
+        setReadIds(next);
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    };
+
     useEffect(() => {
         let active = true;
 
@@ -381,6 +394,15 @@ const Navbar: React.FC = () => {
         <div className="notification-menu">
             <div className="notification-menu-header">
                 <span>Notifications</span>
+                {notifications.length > 0 && (
+                    <button
+                        type="button"
+                        className="notification-mark-all"
+                        onClick={markAllRead}
+                    >
+                        Mark all as read
+                    </button>
+                )}
             </div>
             {!notifications.length ? (
                 <div className="notification-empty">No alerts right now.</div>

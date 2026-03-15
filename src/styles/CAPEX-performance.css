@@ -125,6 +125,18 @@
     padding: 10px;
 }
 
+.capex-chart-empty {
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+    border: 1px dashed rgba(148, 163, 184, 0.5);
+    border-radius: var(--radius-lg);
+    background: var(--bg-surface);
+}
+
 .capex-table-card {
   margin-top: 10px;
   width: calc(100vw - 355px);

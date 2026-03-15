@@ -127,8 +127,14 @@ const ProjectTimeline = (project: any) => {
         if (Array.isArray(project?.projectTimeline)) {
             try {
                 const latestVersionId = localStorage.getItem("latestProjectVersion");
-                const foundTimeline = project?.projectTimeline.filter((item: any) => item.version == latestVersionId);
-                const timelineId = !latestVersionId ? project.projectTimeline[0].timelineId : foundTimeline[0].timelineId;
+                const timelines = project.projectTimeline || [];
+                if (!timelines.length) return [];
+                const foundTimeline = timelines.filter((item: any) => item.version == latestVersionId);
+                const selectedTimeline = latestVersionId
+                    ? foundTimeline[0] || timelines[0]
+                    : timelines[0];
+                const timelineId = selectedTimeline?.timelineId;
+                if (!timelineId) return [];
                 const timeline = await db.getProjectTimelineById(timelineId);
                 if (timeline[0]?.orgId != currentUser.orgId) return;
                 const finTimeline = timeline.map(({ id, ...rest }: any) => rest);

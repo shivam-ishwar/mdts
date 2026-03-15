@@ -346,8 +346,19 @@ const Charts = (props: any) => {
                 }
 
                 const latestVersion = localStorage.getItem("latestProjectVersion");
-                const versions = project?.projectTimeline || [];
-                const selected = latestVersion ? versions.find((v: any) => String(v.version) === String(latestVersion)) : versions[0];
+                const versions = Array.isArray(project?.projectTimeline) ? project.projectTimeline : [];
+                const selected =
+                    (latestVersion
+                        ? versions.find(
+                            (v: any) =>
+                                String(v?.version) === String(latestVersion) ||
+                                String(v?.timelineId) === String(latestVersion) ||
+                                String(v?.versionId) === String(latestVersion)
+                        )
+                        : null) ||
+                    versions[versions.length - 1] ||
+                    versions.find((v: any) => v?.timelineId) ||
+                    versions[0];
 
                 if (!selected?.timelineId) {
                     setTimeline([]);
@@ -356,7 +367,16 @@ const Charts = (props: any) => {
                 }
 
                 const timelineData = await db.getProjectTimelineById(selected.timelineId);
-                const normalized = Array.isArray(timelineData) ? timelineData : [];
+                let normalized: any[] = [];
+                if (Array.isArray(timelineData)) {
+                    normalized = timelineData;
+                } else if (Array.isArray((timelineData as any)?.data)) {
+                    normalized = (timelineData as any).data;
+                } else if (Array.isArray((timelineData as any)?.modules)) {
+                    normalized = (timelineData as any).modules;
+                } else if (Array.isArray((timelineData as any)?.activities)) {
+                    normalized = [timelineData];
+                }
                 setTimeline(normalized);
                 setTimelineState(normalized.length ? "ready" : "missing");
             } catch (err) {

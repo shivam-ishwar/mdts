@@ -254,7 +254,8 @@
     margin-top: 8px;
 }
 
-.notification-action-btn {
+.notification-action-btn,
+.notification-mark-all {
     background: transparent;
     border: none;
     color: #2563eb;
@@ -263,7 +264,8 @@
     padding: 0;
 }
 
-.notification-action-btn:hover {
+.notification-action-btn:hover,
+.notification-mark-all:hover {
     text-decoration: underline;
 }
 
