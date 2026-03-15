@@ -159,6 +159,14 @@ export interface ActivityBudgetDocument {
   uploadedBy?: string;
 }
 
+export interface NotificationRead {
+  id: string;
+  notificationId: string;
+  userId: string;
+  orgId: string;
+  readAt: string;
+}
+
 
 export class DataStorage extends Dexie {
   mineTypes!: Table<MineType, number>;
@@ -179,6 +187,7 @@ export class DataStorage extends Dexie {
   knowledgePosts!: Table<KnowledgePost, number>;
   knowledgeComments!: Table<KnowledgeComment, number>;
   knowledgeReactions!: Table<KnowledgeReaction & { id?: number; postId: number }, number>;
+  notificationReads!: Table<NotificationRead, string>;
 
   constructor() {
     super("MTDS");
@@ -234,6 +243,10 @@ export class DataStorage extends Dexie {
       knowledgeReactions: "++id, postId, createdAt, email, type",
     });
 
+    this.version(9).stores({
+      notificationReads: "id, notificationId, userId, orgId, readAt",
+    });
+
     this.mineTypes = this.table("mineTypes");
     this.modules = this.table("modules");
     this.moduleLibrary = this.table("moduleLibrary");
@@ -252,6 +265,7 @@ export class DataStorage extends Dexie {
     this.knowledgePosts = this.table("knowledgePosts");
     this.knowledgeComments = this.table("knowledgeComments");
     this.knowledgeReactions = this.table("knowledgeReactions");
+    this.notificationReads = this.table("notificationReads");
   }
 
   async addModule(module: any): Promise<number> {
@@ -472,6 +486,30 @@ export class DataStorage extends Dexie {
 
   async getAllProjectTimeline(): Promise<any> {
     return this.projectTimelines.toArray();
+  }
+
+  async getNotificationReads(userId: string, orgId: string): Promise<NotificationRead[]> {
+    return this.notificationReads
+      .where({ userId: String(userId), orgId: String(orgId) })
+      .toArray();
+  }
+
+  async markNotificationRead(notificationId: string, userId: string, orgId: string): Promise<void> {
+    const id = `${orgId}:${userId}:${notificationId}`;
+    const existing = await this.notificationReads.get(id);
+    if (existing) return;
+    await this.notificationReads.put({
+      id,
+      notificationId,
+      userId: String(userId),
+      orgId: String(orgId),
+      readAt: new Date().toISOString(),
+    });
+  }
+
+  async markNotificationUnread(notificationId: string, userId: string, orgId: string): Promise<void> {
+    const id = `${orgId}:${userId}:${notificationId}`;
+    await this.notificationReads.delete(id);
   }
 
   async getProjectTimelineById(id: any): Promise<any> {

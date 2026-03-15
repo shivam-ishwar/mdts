@@ -38,7 +38,7 @@
     background: var(--su-surface);
     padding: 10px 12px;
     margin: 8px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     box-shadow: var(--su-shadow);
 }
 
@@ -184,7 +184,7 @@
 
 .project-timeline-btn.ant-btn {
     height: 36px;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     border: 1px solid var(--su-border);
     background: var(--su-surface);
     color: var(--su-text);

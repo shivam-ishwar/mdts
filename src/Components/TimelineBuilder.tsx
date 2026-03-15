@@ -138,6 +138,17 @@ const TimeBuilder = () => {
   const queryParams = new URLSearchParams(location.search);
   const projectIdForTimeline = queryParams.get("projectId");
 
+  const resolveSelectedProject = () => {
+    if (selectedProjectId) {
+      const fromList = allProjects.find((proj) => proj.id == selectedProjectId);
+      if (fromList) return fromList;
+    }
+    if (selectedProject && (!selectedProjectId || selectedProject.id == selectedProjectId)) {
+      return selectedProject;
+    }
+    return null;
+  };
+
   useEffect(() => {
     loadUser();
   }, []);
@@ -173,6 +184,9 @@ const TimeBuilder = () => {
       setSelectedProjectName(projectParameters?.projectName || "");
       setSelectedProjectId(id || "");
       setSelectedProject(selectedProject || {});
+      if (selectedProject) {
+        setAllProjects([selectedProject]);
+      }
       setFinalHolidays(holidays || []);
       setSelectedLibraryId(initialStatus?.id);
       setLibraryName(initialStatus?.library || []);
@@ -1496,8 +1510,12 @@ const TimeBuilder = () => {
         key: "start",
         className: step == 5 ? "active-column" : "",
         render: (_: any, record: any) => {
+          const hasPrerequisite =
+            record.prerequisite != null &&
+            String(record.prerequisite).trim() !== "" &&
+            String(record.prerequisite).trim() !== "-";
           const isDisabled =
-            step !== 5 || record.activityStatus == "completed" || record.prerequisite !== "";
+            step !== 5 || record.activityStatus == "completed" || hasPrerequisite;
           const datePickerClass = step == 5 && !isDisabled ? "highlighted-datepicker" : "";
 
           return (
@@ -1994,14 +2012,15 @@ const TimeBuilder = () => {
         return;
       }
 
-      if (selectedProjectId) {
-        const selectedProject = allProjects.find((proj) => proj.id == selectedProjectId);
-        if (!selectedProject) {
-          notify.error("Selected project not found.");
-          return;
-        }
+      const baseProject = resolveSelectedProject();
+      const projectId = selectedProjectId || baseProject?.id;
+      if (!baseProject || !projectId) {
+        notify.error("Selected project not found.");
+        return;
+      }
 
-        const existingLibrary = selectedProject.initialStatus?.library;
+      if (projectId) {
+        const existingLibrary = baseProject.initialStatus?.library;
         let confirmMessage = "";
         if (existingLibrary) {
           confirmMessage = `A group (${existingLibrary}) is already linked to this project. Do you want to replace it?`;
@@ -2021,32 +2040,31 @@ const TimeBuilder = () => {
             setSelectedGroupName(foundLibrary.name);
             setCurrentStep(0);
 
-            const updatedProjects = allProjects.map((proj) => {
-              if (proj.id == selectedProjectId) {
-                return {
-                  ...proj,
-                  initialStatus: {
-                    ...proj.initialStatus,
-                    library: foundLibrary.name,
-                    items: foundLibrary.items,
-                    id: foundLibrary.id,
-                    guiId: foundLibrary.guiId,
-                    name: foundLibrary.name,
-                    mineType: foundLibrary.mineType,
-                    userGuiId: foundLibrary.userGuiId,
-                    orgId: foundLibrary.orgId,
-                    createdAt: foundLibrary.createdAt
-                  },
-                };
-              }
-              return proj;
-            });
+            const updatedProject = {
+              ...baseProject,
+              initialStatus: {
+                ...baseProject.initialStatus,
+                library: foundLibrary.name,
+                items: foundLibrary.items,
+                id: foundLibrary.id,
+                guiId: foundLibrary.guiId,
+                name: foundLibrary.name,
+                mineType: foundLibrary.mineType,
+                userGuiId: foundLibrary.userGuiId,
+                orgId: foundLibrary.orgId,
+                createdAt: foundLibrary.createdAt,
+              },
+            };
+
+            const updatedProjects = allProjects.length
+              ? allProjects.map((proj) => (proj.id == projectId ? updatedProject : proj))
+              : [updatedProject];
 
             setAllProjects(updatedProjects);
+            setSelectedProject(updatedProject);
 
-            const updatedProject = updatedProjects.find((p) => p.id == selectedProjectId);
             if (updatedProject) {
-              await db.updateProject(selectedProjectId, updatedProject);
+              await db.updateProject(projectId, updatedProject);
               notify.success("Group linked successfully!");
             }
           },
@@ -2128,14 +2146,15 @@ const TimeBuilder = () => {
         return;
       }
 
-      if (selectedProjectId) {
-        const selectedProject = allProjects.find((proj) => proj.id === selectedProjectId);
-        if (!selectedProject) {
-          notify.error("Selected project not found.");
-          return;
-        }
+      const baseProject = resolveSelectedProject();
+      const projectId = selectedProjectId || baseProject?.id;
+      if (!baseProject || !projectId) {
+        notify.error("Selected project not found.");
+        return;
+      }
 
-        const existingLibrary = selectedProject.initialStatus?.library;
+      if (projectId) {
+        const existingLibrary = baseProject.initialStatus?.library;
         let confirmMessage = "";
         if (existingLibrary) {
           confirmMessage = `A group (${existingLibrary}) is already linked to this project. Do you want to replace it?`;
@@ -2154,32 +2173,31 @@ const TimeBuilder = () => {
             setSelectedLibraryId(foundLibrary.id);
             setSelectedLibrary(foundLibrary);
 
-            const updatedProjects = allProjects.map((proj) => {
-              if (proj.id === selectedProjectId) {
-                return {
-                  ...proj,
-                  initialStatus: {
-                    ...proj.initialStatus,
-                    library: foundLibrary.name,
-                    items: foundLibrary.items,
-                    id: foundLibrary.id,
-                    guiId: foundLibrary.guiId,
-                    name: foundLibrary.name,
-                    mineType: foundLibrary.mineType,
-                    userGuiId: foundLibrary.userGuiId,
-                    orgId: foundLibrary.orgId,
-                    createdAt: foundLibrary.createdAt
-                  },
-                };
-              }
-              return proj;
-            });
+            const updatedProject = {
+              ...baseProject,
+              initialStatus: {
+                ...baseProject.initialStatus,
+                library: foundLibrary.name,
+                items: foundLibrary.items,
+                id: foundLibrary.id,
+                guiId: foundLibrary.guiId,
+                name: foundLibrary.name,
+                mineType: foundLibrary.mineType,
+                userGuiId: foundLibrary.userGuiId,
+                orgId: foundLibrary.orgId,
+                createdAt: foundLibrary.createdAt,
+              },
+            };
+
+            const updatedProjects = allProjects.length
+              ? allProjects.map((proj) => (proj.id == projectId ? updatedProject : proj))
+              : [updatedProject];
 
             setAllProjects(updatedProjects);
+            setSelectedProject(updatedProject);
 
-            const updatedProject = updatedProjects.find((p) => p.id === selectedProjectId);
             if (updatedProject) {
-              await db.updateProject(selectedProjectId, updatedProject);
+              await db.updateProject(projectId, updatedProject);
               notify.success("Group linked successfully!");
             }
           },

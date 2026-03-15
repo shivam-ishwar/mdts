@@ -1221,7 +1221,7 @@ const Charts = (props: any) => {
             {
                 key: "delay",
                 label: "Delay Exposure",
-                value: `${topStats.totalDelayDays}d`,
+                value: `${topStats.totalDelayDays}D`,
                 hint: `${topStats.totalDelayedActivities} delayed activities`,
                 meta: `Avg ${topStats.avgDelayPerDelayedActivity}d per delayed activity`,
             },

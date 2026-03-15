@@ -312,7 +312,7 @@
 
 .quickBtn {
   border: 1px solid rgba(15, 23, 42, 0.18);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.92);
   padding: 10px;
   font-size: 10px;
@@ -342,7 +342,7 @@
 .select {
   width: 100%;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(15, 23, 42, 0.12);
   color: var(--text);
@@ -545,7 +545,7 @@
   --stat-accent-soft: rgba(2, 132, 199, 0.12);
   margin: 2px;
   border: 1px solid rgba(15, 23, 42, 0.09);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
   padding: 13px 14px;
   position: relative;
@@ -826,7 +826,7 @@
 
 .tooltipCard {
   min-width: 280px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   padding: 12px 12px 10px 12px;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(15, 23, 42, 0.12);

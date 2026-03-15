@@ -165,7 +165,7 @@
 
 .carousel-button {
   padding: 12px 18px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   font-weight: 900;
   font-size: 13.5px;
   text-decoration: none;
@@ -238,7 +238,7 @@
 
   .carousel-wrapper {
     height: 560px;
-    border-radius: 18px;
+    border-radius: var(--radius-md);
   }
 
   .animated-text-container {
@@ -267,7 +267,7 @@
 @media (max-width: 520px) {
   .carousel-wrapper {
     height: 520px;
-    border-radius: 16px;
+    border-radius: var(--radius-md);
   }
 
   .carousel-button {

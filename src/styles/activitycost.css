@@ -118,7 +118,7 @@
 }
 
 .activity-cost-input.ant-input-number {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .activity-cost-input.ant-input-number:hover,

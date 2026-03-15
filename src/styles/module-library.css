@@ -42,7 +42,7 @@
 .page-heading-module-library {
     border: 1px solid #ddd;
     padding: 10px;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     margin: 10px;
 }
 

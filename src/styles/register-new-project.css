@@ -21,7 +21,7 @@
 .registration-page-heading {
     border: 1px solid #ddd;
     padding: 10px;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
 }
 
 .registration-left {
@@ -158,7 +158,7 @@
 .drop-zone {
     border: 2px dashed #d9d9d9;
     padding: 16px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     text-align: center;
     cursor: pointer;
     margin-bottom: 10px;

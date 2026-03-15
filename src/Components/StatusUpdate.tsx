@@ -570,6 +570,8 @@ export const StatusUpdate = () => {
             isModule: false,
             activityStatus: activity.activityStatus || "yetToStart",
             fin_status: activity.fin_status || '',
+            saturdayWorking: activity.saturdayWorking ?? module?.saturdayWorking ?? false,
+            sundayWorking: activity.sundayWorking ?? module?.sundayWorking ?? false,
             notes: activity.notes || [],
             raci: activity.raci || {},
             cost: activity.cost || {},
@@ -648,11 +650,15 @@ export const StatusUpdate = () => {
 
       const preReqCodes = record.preRequisite
         .split(',')
-        .map((c: string) => c.trim().toLowerCase());
+        .map((c: string) => c.trim().toLowerCase())
+        .filter((c: string) => c && c !== '-');
+
+      if (!preReqCodes.length) return false;
 
       return preReqCodes.some((code: any) => {
         const act = flatList.find((x) => (x.Code || '').toLowerCase() == code);
-        return !act || (act.activityStatus || '').toLowerCase() !== 'completed';
+        if (!act) return false;
+        return (act.activityStatus || '').toLowerCase() !== 'completed';
       });
     };
 
@@ -700,12 +706,20 @@ export const StatusUpdate = () => {
     );
   };
 
-  const getWorkingDaysDiff = (start: dayjs.Dayjs, end: dayjs.Dayjs): number => {
+  const isWorkingDayWithConfig = (date: dayjs.Dayjs, rec?: any) => {
+    const saturdayWorking = rec?.saturdayWorking ?? false;
+    const sundayWorking = rec?.sundayWorking ?? false;
+    const day = date.day();
+    if (day === 6 && !saturdayWorking) return false;
+    if (day === 0 && !sundayWorking) return false;
+    return true;
+  };
+
+  const getWorkingDaysDiff = (start: dayjs.Dayjs, end: dayjs.Dayjs, rec?: any): number => {
     let count = 0;
     let current = start.clone();
     while (current.isBefore(end, 'day') || current.isSame(end, 'day')) {
-      const day = current.day();
-      if (day !== 0 && day !== 6) {
+      if (isWorkingDayWithConfig(current, rec)) {
         count++;
       }
       current = current.add(1, 'day');
@@ -713,13 +727,12 @@ export const StatusUpdate = () => {
     return count - 1;
   };
 
-  function getBusinessDays(start: dayjs.Dayjs, end: dayjs.Dayjs): number {
+  function getBusinessDays(start: dayjs.Dayjs, end: dayjs.Dayjs, rec?: any): number {
     let count = 0;
     let current = start.clone();
 
     while (current.isBefore(end, 'day') || current.isSame(end, 'day')) {
-      const day = current.day();
-      if (day !== 0 && day !== 5) {
+      if (isWorkingDayWithConfig(current, rec)) {
         count++;
       }
       current = current.add(1, 'day');
@@ -790,8 +803,8 @@ export const StatusUpdate = () => {
           plannedStartDate &&
           plannedFinishDate &&
           actualStartDate &&
-          getBusinessDays(actualStartDate, dayjs()) <=
-          getBusinessDays(plannedStartDate, plannedFinishDate);
+          getBusinessDays(actualStartDate, dayjs(), record) <=
+          getBusinessDays(plannedStartDate, plannedFinishDate, record);
 
         if (activityStatus === "completed") {
           const isCompletedOnTime = isStartSame && isFinishSame;
@@ -885,7 +898,7 @@ export const StatusUpdate = () => {
           ? dayjs(actualFinish, 'DD-MM-YYYY')
           : null;
 
-        const calculatedDuration = start && finish ? getWorkingDaysDiff(start, finish) : null;
+        const calculatedDuration = start && finish ? getWorkingDaysDiff(start, finish, record) : null;
 
         const displayDuration = expectedDuration ?? calculatedDuration ?? duration;
 
@@ -1140,8 +1153,7 @@ export const StatusUpdate = () => {
     let d = as.clone();
     while (count < useDur) {
       d = d.add(1, 'day');
-      const wd = d.day();
-      if (wd !== 0 && wd !== 6) count++;
+      if (isWorkingDayWithConfig(d, rec)) count++;
     }
     return d;
   };
@@ -1233,7 +1245,7 @@ export const StatusUpdate = () => {
   const delayDaysFor = (rec: any): number => {
     const { pf } = plannedWindow(rec);
     const bf = blockingFinish(rec);
-    if (pf && bf && bf.isAfter(pf, 'day')) return getWorkingDaysDiff(pf, bf);
+    if (pf && bf && bf.isAfter(pf, 'day')) return getWorkingDaysDiff(pf, bf, rec);
     return 0;
   };
 
@@ -1260,23 +1272,35 @@ export const StatusUpdate = () => {
       const parseDate = (date: string | null | undefined) =>
         date && dayjs(date, 'DD-MM-YYYY').isValid() ? dayjs(date, 'DD-MM-YYYY') : null;
 
-      const addBusinessDays = (start: dayjs.Dayjs, numDays: number): dayjs.Dayjs => {
+      const getWorkConfig = (rec?: any) => ({
+        saturdayWorking: rec?.saturdayWorking ?? false,
+        sundayWorking: rec?.sundayWorking ?? false,
+      });
+
+      const isWorkingDay = (date: dayjs.Dayjs, cfg: { saturdayWorking: boolean; sundayWorking: boolean }) => {
+        const day = date.day();
+        if (day === 6 && !cfg.saturdayWorking) return false;
+        if (day === 0 && !cfg.sundayWorking) return false;
+        return true;
+      };
+
+      const addBusinessDays = (start: dayjs.Dayjs, numDays: number, rec?: any): dayjs.Dayjs => {
         let count = 0;
         let date = start.clone();
+        const cfg = getWorkConfig(rec);
         while (count < numDays) {
           date = date.add(1, 'day');
-          const day = date.day();
-          if (day !== 0 && day !== 6) count++;
+          if (isWorkingDay(date, cfg)) count++;
         }
         return date;
       };
 
-      const businessDaysBetween = (start: dayjs.Dayjs, end: dayjs.Dayjs): number => {
+      const businessDaysBetween = (start: dayjs.Dayjs, end: dayjs.Dayjs, rec?: any): number => {
         let count = 0;
         let date = start.clone();
+        const cfg = getWorkConfig(rec);
         while (date.isBefore(end, 'day') || date.isSame(end, 'day')) {
-          const day = date.day();
-          if (day !== 0 && day !== 6) count++;
+          if (isWorkingDay(date, cfg)) count++;
           date = date.add(1, 'day');
         }
         return count;
@@ -1337,7 +1361,7 @@ export const StatusUpdate = () => {
               const latest: any = getLatestPreReqFinishDate(data, preReq);
               const duration = activity.duration ? parseInt(activity.duration, 10) : 0;
               const start = latest.add(1, 'day');
-              const finish = addBusinessDays(start, duration);
+              const finish = addBusinessDays(start, duration, activity);
 
               activity.actualStart = start.format('DD-MM-YYYY');
               activity.actualFinish = finish.format('DD-MM-YYYY');
@@ -1394,7 +1418,7 @@ export const StatusUpdate = () => {
                   actualFinishDate.isBefore(today, 'day')
                 ) {
                   subItem.actualFinish = today.format('DD-MM-YYYY');
-                  subItem.expectedDuration = businessDaysBetween(actualStartDate, today);
+                  subItem.expectedDuration = businessDaysBetween(actualStartDate, today, subItem);
                   subItem.activityStatus = value;
                   updatedCodes.add(subItem.Code);
                   return subItem;
@@ -1419,7 +1443,7 @@ export const StatusUpdate = () => {
                   (value == 'completed' &&
                     tempStart &&
                     plannedDuration >= 0 &&
-                    addBusinessDays(tempStart, plannedDuration).isAfter(today, 'day'))
+                    addBusinessDays(tempStart, plannedDuration, subItem).isAfter(today, 'day'))
                 ) {
                   notify.error(`Cannot mark as '${value}' when actual dates exceed today's date.`);
                   return subItem;
@@ -1428,20 +1452,20 @@ export const StatusUpdate = () => {
                 subItem.actualStart = tempStart?.format('DD-MM-YYYY') || null;
 
                 if ((value == 'inProgress') && tempStart && tempStart.isBefore(today, 'day')) {
-                  const daysTillToday = businessDaysBetween(tempStart, today);
+                  const daysTillToday = businessDaysBetween(tempStart, today, subItem);
                   const effectiveDuration = Math.max(daysTillToday, plannedDuration);
-                  const newFinish = addBusinessDays(tempStart, effectiveDuration);
+                  const newFinish = addBusinessDays(tempStart, effectiveDuration, subItem);
                   subItem.actualFinish = newFinish.format('DD-MM-YYYY');
                   subItem.expectedDuration = effectiveDuration;
                 } if ((value == 'completed') && tempStart) {
                   const duration = subItem.expectedDuration ?? plannedDuration;
-                  const newFinish = addBusinessDays(tempStart, duration);
+                  const newFinish = addBusinessDays(tempStart, duration, subItem);
                   subItem.actualFinish = newFinish.format('DD-MM-YYYY');
                   subItem.expectedDuration = duration;
                 }
                 else {
                   const tempFinish = tempStart && plannedDuration >= 0
-                    ? addBusinessDays(tempStart, plannedDuration)
+                    ? addBusinessDays(tempStart, plannedDuration, subItem)
                     : null;
                   subItem.actualFinish = tempFinish?.format('DD-MM-YYYY') || null;
                   subItem.expectedDuration = plannedDuration;
@@ -1489,7 +1513,7 @@ export const StatusUpdate = () => {
                 newStart &&
                 subItem.expectedDuration != null
               ) {
-                const newCalculatedFinish = addBusinessDays(newStart, subItem.expectedDuration);
+                const newCalculatedFinish = addBusinessDays(newStart, subItem.expectedDuration, subItem);
                 if (newCalculatedFinish.isAfter(today, 'day')) {
                   notify.error(`Cannot change actual start — it pushes actual finish beyond today's date for a completed activity.`);
                   return subItem;
@@ -1497,7 +1521,7 @@ export const StatusUpdate = () => {
               }
               subItem.actualStart = value;
               if (newStart && subItem.expectedDuration != null) {
-                subItem.actualFinish = addBusinessDays(newStart, subItem.expectedDuration).format('DD-MM-YYYY');
+                subItem.actualFinish = addBusinessDays(newStart, subItem.expectedDuration, subItem).format('DD-MM-YYYY');
               }
 
             } else if (fieldName == 'actualFinish') {
@@ -1522,7 +1546,7 @@ export const StatusUpdate = () => {
 
               const start = parseDate(subItem.actualStart);
               if (start && newFinish) {
-                const dur = businessDaysBetween(start, newFinish);
+                const dur = businessDaysBetween(start, newFinish, subItem);
                 subItem.expectedDuration = dur >= 0 ? dur : null;
               }
 
@@ -1533,7 +1557,7 @@ export const StatusUpdate = () => {
               const actualStart = parseDate(subItem.actualStart);
 
               if (actualStart && dayjs(actualStart).isValid() && !isNaN(duration)) {
-                const newFinish = addBusinessDays(actualStart, duration);
+                const newFinish = addBusinessDays(actualStart, duration, subItem);
                 subItem.actualFinish = newFinish.format('DD-MM-YYYY');
               } else {
                 subItem.actualFinish = null;
@@ -1551,7 +1575,7 @@ export const StatusUpdate = () => {
               actualFinish.isBefore(today, 'day')
             ) {
               const newFinish = today;
-              const dur = businessDaysBetween(actualStart, newFinish);
+              const dur = businessDaysBetween(actualStart, newFinish, subItem);
               if (subItem.expectedDuration != null && dur < subItem.expectedDuration) {
                 notify.error(`Cannot reduce duration by updating actual finish to today.`);
               } else {

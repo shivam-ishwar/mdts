@@ -49,7 +49,7 @@
     max-height: 320px;
     overflow-y: auto;
     background: var(--bg-surface);
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
 }
 
@@ -105,7 +105,7 @@
     padding: 10px;
     margin: 12px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     background: var(--bg-muted);
     flex-wrap: wrap;
 }
@@ -134,7 +134,7 @@
 .raci-project-block {
     margin-bottom: 14px;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     overflow: hidden;
     background: var(--bg-surface);
     box-shadow: var(--shadow-sm);

@@ -177,6 +177,10 @@
     color: var(--text-primary);
     border-bottom: 1px solid var(--border);
     background: var(--bg-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .notification-empty {
@@ -193,10 +197,19 @@
 .notification-item {
     padding: 10px 12px;
     border-bottom: 1px solid var(--border);
+    cursor: pointer;
 }
 
 .notification-item:last-child {
     border-bottom: none;
+}
+
+.notification-item.unread {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.notification-item.read {
+    opacity: 0.7;
 }
 
 .notification-item.high {
@@ -235,6 +248,23 @@
     font-size: 12px;
     color: var(--text-secondary);
     line-height: 1.4;
+}
+
+.notification-actions {
+    margin-top: 8px;
+}
+
+.notification-action-btn {
+    background: transparent;
+    border: none;
+    color: #2563eb;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.notification-action-btn:hover {
+    text-decoration: underline;
 }
 
 .notification-icon-wrapper:hover {

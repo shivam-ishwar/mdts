@@ -43,6 +43,7 @@ type ProjectDetails = {
   projectParameters?: Record<string, unknown>;
   locations?: Record<string, unknown>;
   contractualDetails?: Record<string, unknown>;
+  financialParameters?: Record<string, unknown>;
   documents?: ProjectDocument[];
   initialStatus?: {
     library?: unknown;
@@ -57,29 +58,6 @@ type ProjectDetails = {
     }>;
   };
 };
-
-const EXCLUDE_FROM_PROJECT_DETAILS = [
-  "State",
-  "District",
-  "Nearest Town",
-  "Nearest Airport",
-  "Nearest Railway Station",
-  "Mine Owner",
-  "Date Of H1 Bidder",
-  "Cbdpa Date",
-  "Vesting Order Date",
-  "Pbg Amount",
-];
-
-const normalizeKey = (v: unknown) => String(v).toLowerCase().replace(/[\s_]/g, "");
-
-const shouldExclude = (key: string) => {
-  const norm = normalizeKey(key);
-  return EXCLUDE_FROM_PROJECT_DETAILS.some((k) => normalizeKey(k) === norm);
-};
-
-const capitalizeLabel = (label: string) =>
-  label.replace(/([A-Z])/g, " $1").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
 const parseDateStrict = (val: unknown): Dayjs | null => {
   if (!val) return null;
@@ -110,10 +88,24 @@ const parseDateStrict = (val: unknown): Dayjs | null => {
   return null;
 };
 
-const formatValue = (value: unknown) => {
+const hasValue = (value: unknown) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string" && value.trim() === "") return false;
+  return true;
+};
+
+const displayValue = (value: unknown) => (hasValue(value) ? String(value) : "-");
+
+const formatDate = (value: unknown) => {
   const d = parseDateStrict(value);
-  if (d) return d.format("DD/MM/YYYY");
-  return value !== null && value !== undefined ? String(value) : "";
+  return d ? d.format("DD-MM-YYYY") : "-";
+};
+
+const displayWithUnit = (value: unknown, unit: string, prefix?: string) => {
+  if (!hasValue(value)) return "-";
+  const val = String(value);
+  const pre = prefix ? `${prefix} ` : "";
+  return `${pre}${val} ${unit}`;
 };
 
 const downloadFile = (file?: File) => {
@@ -167,20 +159,60 @@ export default function EDPP({ code }: EDPPProps) {
     const p = projectDetails?.projectParameters || {};
     const l = projectDetails?.locations || {};
     const c = projectDetails?.contractualDetails || {};
+    const f = projectDetails?.financialParameters || {};
     return [
       {
         title: "Project Details",
-        entries: Object.entries(p).filter(([k]) => !shouldExclude(k)),
+        entries: [
+          { label: "Company Name", value: displayValue((p as any).companyName) },
+          { label: "Project Name", value: displayValue((p as any).projectName) },
+          { label: "Mineral", value: displayValue((p as any).mineral) },
+          { label: "Type of Mine", value: displayValue((p as any).typeOfMine) },
+          { label: "Grade (in case of Coal)", value: displayValue((p as any).grade) },
+          { label: "Reserve", value: displayWithUnit((p as any).reserve, "MT") },
+          { label: "Net Geological Reserve", value: displayWithUnit((p as any).netGeologicalReserve, "MT") },
+          { label: "Extractable Reserve", value: displayWithUnit((p as any).extractableReserve, "MT") },
+          { label: "Strip Ratio", value: displayWithUnit((p as any).stripRatio, "m³/t") },
+          { label: "Peak Capacity", value: displayWithUnit((p as any).peakCapacity, "MTPA") },
+          { label: "Mine Life", value: displayWithUnit((p as any).mineLife, "years") },
+          { label: "Total Coal Block Area", value: displayWithUnit((p as any).totalCoalBlockArea, "hectares") },
+        ],
       },
       {
         title: "Location Details",
-        entries: Object.entries(l),
+        entries: [
+          { label: "Mine Location", value: displayValue((l as any).mineLocation) },
+          { label: "State", value: displayValue((l as any).state) },
+          { label: "District", value: displayValue((l as any).district) },
+          { label: "Nearest Town", value: displayValue((l as any).nearestTown) },
+          { label: "Nearest Airport", value: displayValue((l as any).nearestAirport) },
+          { label: "Nearest Railway Station", value: displayValue((l as any).nearestRailwayStation) },
+        ],
       },
       {
         title: "Contractual Details",
-        entries: Object.entries(c),
+        entries: [
+          { label: "Mine Owner", value: displayValue((c as any).mineOwner) },
+          { label: "Date of H1 Bidder", value: formatDate((c as any).dateOfH1Bidder) },
+          { label: "CBDPA Date", value: formatDate((c as any).cbdpaDate) },
+          { label: "Vesting Order Date", value: formatDate((c as any).vestingOrderDate) },
+          { label: "PBG Amount", value: displayWithUnit((c as any).pbgAmount, "Cr", "₹") },
+        ],
       },
-    ] as Array<{ title: string; entries: Array<[string, unknown]> }>;
+      {
+        title: "Financial Parameters",
+        entries: [
+          { label: "Total Project cost", value: displayWithUnit((f as any).totalProjectCost, "Cr", "₹") },
+          { label: "EBITDA Percentage", value: displayWithUnit((f as any).ebitdaPercentage, "%") },
+          { label: "IRR", value: displayWithUnit((f as any).irrPercentage, "%") },
+          { label: "NPV", value: displayWithUnit((f as any).npvPercentage, "%") },
+          { label: "PAT", value: displayWithUnit((f as any).patPercentage, "%") },
+          { label: "PAT / Ton", value: displayWithUnit((f as any).patPerTon, "/ton", "₹") },
+          { label: "ROE", value: displayWithUnit((f as any).roePercentage, "%") },
+          { label: "ROCE", value: displayWithUnit((f as any).rocePercentage, "%") },
+        ],
+      },
+    ] as Array<{ title: string; entries: Array<{ label: string; value: string }> }>;
   }, [projectDetails]);
 
   const documents = useMemo(() => {
@@ -238,13 +270,13 @@ export default function EDPP({ code }: EDPPProps) {
                     wrapperCol={{ span: 16 }}
                   >
                     <Row gutter={16}>
-                      {s.entries.map(([key, value]) => (
-                        <Col span={12} key={key}>
+                      {s.entries.map((entry) => (
+                        <Col span={12} key={entry.label}>
                           <Form.Item
-                            label={<span style={{ fontWeight: 800 }}>{capitalizeLabel(key)}</span>}
+                            label={<span style={{ fontWeight: 800 }}>{entry.label}</span>}
                             colon={false}
                           >
-                            <Input value={formatValue(value)} readOnly />
+                            <Input value={entry.value} readOnly />
                           </Form.Item>
                         </Col>
                       ))}
@@ -291,7 +323,7 @@ export default function EDPP({ code }: EDPPProps) {
                             title={<span className="edpp-docs-meta-title">{doc.documentName}</span>}
                             description={
                               <span className="edpp-docs-meta-desc">
-                                Uploaded on: {formatValue(doc.uploadedAt)}
+                                Uploaded on: {formatDate(doc.uploadedAt)}
                               </span>
                             }
                           />
@@ -306,7 +338,7 @@ export default function EDPP({ code }: EDPPProps) {
             <Card title="Initial Status - Activities" style={{ marginBottom: 20 }}>
               {projectDetails?.initialStatus?.library ? (
                 <Title level={5} className="edpp-timeline-title">
-                  {formatValue(projectDetails.initialStatus.library)}
+                  {displayValue(projectDetails.initialStatus.library)}
                 </Title>
               ) : null}
 
@@ -332,10 +364,10 @@ export default function EDPP({ code }: EDPPProps) {
                         <Timeline>
                           {acts.map((activity) => (
                             <Timeline.Item key={String(activity.code || activity.activityName || Math.random())}>
-                              <strong>{formatValue(activity.activityName)}</strong>
+                              <strong>{displayValue(activity.activityName)}</strong>
                               <span className="edpp-subtle">
                                 {" "}
-                                • Code: {formatValue(activity.code)} • Duration: {formatValue(activity.duration)} days
+                                • Code: {displayValue(activity.code)} • Duration: {displayWithUnit(activity.duration, "days")}
                               </span>
                             </Timeline.Item>
                           ))}

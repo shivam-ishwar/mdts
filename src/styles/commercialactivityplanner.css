@@ -127,7 +127,7 @@
 }
 
 .cap-input.ant-input-number {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .cap-input.ant-input-number:hover,
@@ -138,7 +138,7 @@
 }
 
 .cap-select .ant-select-selector {
-  border-radius: 10px !important;
+  border-radius: var(--radius-md)!important;
 }
 
 .cap-select.ant-select:hover .ant-select-selector,

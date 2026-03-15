@@ -24,6 +24,9 @@ type AppNotification = {
     message: string;
     severity: "high" | "medium" | "low";
     date: string;
+    route?: string;
+    payload?: any;
+    isRead?: boolean;
 };
 
 const initialNavLinks: any[] = [
@@ -74,6 +77,7 @@ const Navbar: React.FC = () => {
     };
     const [loading, setLoading] = useState(false);
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
+    const [readIds, setReadIds] = useState<Set<string>>(new Set());
 
     const parseAnyDate = (raw?: string | null) => {
         if (!raw) return null;
@@ -102,10 +106,28 @@ const Navbar: React.FC = () => {
         }
     }, []);
 
+    const resolveUserKey = (currentUser?: any) => {
+        const usr = currentUser || userStore.getUser();
+        return usr?.guiId || usr?.id || "";
+    };
+
+    const loadReadIds = async (currentUser?: any) => {
+        const usr = currentUser || userStore.getUser();
+        const userKey = resolveUserKey(usr);
+        if (!usr?.orgId || !userKey) return;
+        const reads = await db.getNotificationReads(String(userKey), String(usr.orgId));
+        setReadIds(new Set(reads.map((r) => r.notificationId)));
+    };
+
+    useEffect(() => {
+        loadReadIds();
+    }, []);
+
     useEffect(() => {
         const updateUser = () => {
             const updatedUser = userStore.getUser();
             setUser(updatedUser);
+            loadReadIds(updatedUser);
         };
 
         updateUser();
@@ -116,6 +138,27 @@ const Navbar: React.FC = () => {
             unsubscribe();
         };
     }, []);
+
+    useEffect(() => {
+        if (!notifications.length) return;
+        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: readIds.has(n.id) })));
+    }, [readIds]);
+
+    const toggleRead = (id: string) => {
+        const currentUser = userStore.getUser();
+        const userKey = resolveUserKey(currentUser);
+        if (!currentUser?.orgId || !userKey) return;
+        const next = new Set(readIds);
+        if (next.has(id)) {
+            next.delete(id);
+            db.markNotificationUnread(id, String(userKey), String(currentUser.orgId));
+        } else {
+            next.add(id);
+            db.markNotificationRead(id, String(userKey), String(currentUser.orgId));
+        }
+        setReadIds(next);
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: next.has(id) } : n)));
+    };
 
     useEffect(() => {
         let active = true;
@@ -145,6 +188,8 @@ const Navbar: React.FC = () => {
                             message: `${projectName}: no timeline version created yet.`,
                             severity: "medium",
                             date: fmtDate(now),
+                            route: "/create/status-update",
+                            payload: { currentProject: project },
                         });
                         continue;
                     }
@@ -161,6 +206,7 @@ const Navbar: React.FC = () => {
                     for (const module of modules) {
                         for (const activity of module?.activities || []) {
                             const activityName = activity?.activityName || activity?.code || "Activity";
+                            const activityKey = activity?.guicode || activity?.id || activity?.code || activityName;
                             const plannedStart = parseAnyDate(activity?.start);
                             const plannedEnd = parseAnyDate(activity?.end);
                             const actualStart = parseAnyDate(activity?.actualStart);
@@ -170,11 +216,13 @@ const Navbar: React.FC = () => {
                             if (plannedEnd && !actualFinish && daysDiff(now, plannedEnd) > 0 && status !== "completed") {
                                 const delayedBy = daysDiff(now, plannedEnd);
                                 out.push({
-                                    id: `delay-${project.id}-${activity?.code || activityName}`,
+                                    id: `delay-${project.id}-${activityKey}`,
                                     title: "Schedule Delay",
                                     message: `${projectName} • ${activityName} is delayed by ${delayedBy} day(s).`,
                                     severity: delayedBy > 7 ? "high" : "medium",
                                     date: fmtDate(now),
+                                    route: "/create/status-update",
+                                    payload: { currentProject: project },
                                 });
                             }
 
@@ -182,11 +230,13 @@ const Navbar: React.FC = () => {
                                 const d = daysDiff(plannedStart, now);
                                 if (d >= 0 && d <= 3) {
                                     out.push({
-                                        id: `upcoming-${project.id}-${activity?.code || activityName}`,
+                                        id: `upcoming-${project.id}-${activityKey}`,
                                         title: "Upcoming Activity",
                                         message: `${projectName} • ${activityName} starts in ${d} day(s).`,
                                         severity: "low",
                                         date: fmtDate(now),
+                                        route: "/create/status-update",
+                                        payload: { currentProject: project },
                                     });
                                 }
                             }
@@ -199,7 +249,9 @@ const Navbar: React.FC = () => {
                     return sev[b.severity] - sev[a.severity];
                 });
 
-                if (active) setNotifications(out.slice(0, 20));
+                const readSet = new Set(readIds);
+                const next = out.slice(0, 20).map((n) => ({ ...n, isRead: readSet.has(n.id) }));
+                if (active) setNotifications(next);
             } catch (err) {
                 console.error("Failed to generate notifications:", err);
                 if (active) setNotifications([]);
@@ -315,20 +367,50 @@ const Navbar: React.FC = () => {
         </Menu>
     );
 
+    const handleNotificationClick = (n: AppNotification) => {
+        if (!n) return;
+        if (!readIds.has(n.id)) {
+            toggleRead(n.id);
+        }
+        if (n.route) {
+            navigate(n.route, n.payload ? { state: n.payload } : undefined);
+        }
+    };
+
     const notificationMenu = (
         <div className="notification-menu">
-            <div className="notification-menu-header">Notifications</div>
+            <div className="notification-menu-header">
+                <span>Notifications</span>
+            </div>
             {!notifications.length ? (
                 <div className="notification-empty">No alerts right now.</div>
             ) : (
                 <div className="notification-list">
                     {notifications.map((n) => (
-                        <div key={n.id} className={`notification-item ${n.severity}`}>
+                        <div
+                            key={n.id}
+                            className={`notification-item ${n.severity} ${n.isRead ? "read" : "unread"}`}
+                            onClick={() => handleNotificationClick(n)}
+                            role="button"
+                            tabIndex={0}
+                        >
                             <div className="notification-title-row">
                                 <span className="notification-title">{n.title}</span>
                                 <span className="notification-date">{n.date}</span>
                             </div>
                             <div className="notification-message">{n.message}</div>
+                            <div className="notification-actions">
+                                <button
+                                    type="button"
+                                    className="notification-action-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleRead(n.id);
+                                    }}
+                                >
+                                    {n.isRead ? "Mark as unread" : "Mark as read"}
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -423,9 +505,13 @@ const Navbar: React.FC = () => {
                             ))}
 
                     </div>
-                    <Dropdown overlay={notificationMenu} trigger={["click"]} placement="bottomRight">
+                    <Dropdown
+                        overlay={notificationMenu}
+                        trigger={["click"]}
+                        placement="bottomRight"
+                    >
                         <span className="notification-icon-wrapper">
-                            <Badge count={notifications.length} size="small" offset={[-2, 4]}>
+                            <Badge count={notifications.filter((n) => !n.isRead).length} size="small" offset={[-2, 4]}>
                                 <BellOutlined className="bell-icon" />
                             </Badge>
                         </span>

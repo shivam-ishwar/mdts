@@ -17,13 +17,13 @@
 .signup-container .signup-left {
   flex: 1;
   max-width: 750px;
-  border-radius: 20px 0 0 20px;
+  border-radius: var(--radius-md);
 }
 
 .signup-container .signup-right {
   flex: 1;
   max-width: 600px;
-  border-radius: 0 20px 20px 0;
+  border-radius: var(--radius-md);
 }
 
 .signup-container .signin-adjust {
@@ -308,7 +308,7 @@
   min-width: 100px;
   font-size: 14px;
   padding: 6px 16px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   margin-bottom: 4px;
 }
 
@@ -336,7 +336,7 @@
 .signup-container .step-line {
   width: 40px;
   height: 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   background-color: rgba(107, 114, 128, .25);
   opacity: .9;
 }
@@ -359,7 +359,7 @@
   .signup-container .signup-right {
     max-width: 900px;
     width: 100%;
-    border-radius: 20px;
+    border-radius: var(--radius-md);
   }
 
   .signup-container .signin-adjust,

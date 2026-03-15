@@ -4,20 +4,20 @@
 
 .employee-registration {
     margin: 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     width: 100%;
 }
 
 .card-header {
     margin-bottom: 8px;
-    border-radius: 4px !important;
+    border-radius: var(--radius-md)!important;
     font-size: 18px;
     font-weight: bold;
 }
 
 .card-body {
     border: 1px solid #ddd;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     padding: 0px !important;
 }
 
@@ -69,7 +69,7 @@
         width: 100px;
         height: 100px;
         object-fit: cover;
-        border-radius: 5px;
+        border-radius: var(--radius-md);
     }
 
     .ant-btn-primary {
@@ -95,7 +95,7 @@
     gap: 20px;
     padding: 10px;
     border: 2px dashed #004d99;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     background-color: #f9f9f9;
     justify-content: center;
     text-align: center;
@@ -112,7 +112,7 @@
     color: #fff;
     background-color: #004d99;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     transition: 0.3s;
 }
@@ -124,7 +124,7 @@
 .upload-preview {
     width: 80px;
     height: 80px;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     object-fit: cover;
     border: 2px solid #004d99;
 }

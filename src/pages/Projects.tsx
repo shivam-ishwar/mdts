@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/projects.css";
-import { Input, Button, Modal, Select, Dropdown, Menu } from "antd";
+import { Button, Modal, Select, Menu } from "antd";
 import { Link } from "react-router-dom";
-import { SearchOutlined } from "@mui/icons-material";
 import {
-    MoreOutlined,
     RobotOutlined,
     PushpinOutlined,
     StarOutlined,
     ShareAltOutlined,
     DeleteOutlined,
-    TeamOutlined,
 } from "@ant-design/icons";
 import { db } from "../Utils/dataStorege.ts";
 import CAPEXPerformance from "./CAPEXPerformance.tsx";
@@ -26,6 +23,9 @@ import { getCurrentUser } from "../Utils/moduleStorage.ts";
 import { useNavigate } from "react-router-dom";
 import PeopleSearch from "./PeopleSearch.tsx";
 import Charts from "./Charts.tsx";
+import ProjectsSidebar from "../Components/Projects/ProjectsSidebar.tsx";
+import PortfolioPanel from "../Components/Projects/PortfolioPanel.tsx";
+import ProjectTabsPanel from "../Components/Projects/ProjectTabsPanel.tsx";
 
 interface LocationDetails {
     state: string;
@@ -92,7 +92,7 @@ interface ProjectData {
 
 const membersList = ["Alice", "Bob", "Charlie", "David", "Emma"];
 
-type RightPanelView = "project" | "people";
+type RightPanelView = "project" | "people" | "portfolio";
 
 const Projects = () => {
     const [allProjects, setAllProjects] = useState<any[]>([]);
@@ -111,9 +111,11 @@ const Projects = () => {
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     const [rightPanelView, setRightPanelView] = useState<RightPanelView>("project");
+    const [portfolioTab, setPortfolioTab] = useState<"technicality" | "projectStats">("projectStats");
 
     const navigate = useNavigate();
     const isPeopleView = rightPanelView === "people";
+    const isPortfolioView = rightPanelView === "portfolio";
 
     const tabs = [
         { key: "fdpp", label: "FDPP" },
@@ -284,8 +286,8 @@ const Projects = () => {
     }
 
     const handleProjectClick = (projectName: string) => {
-        // ✅ People view: project list should be view-only (no selection)
-        if (isPeopleView) return;
+        // ✅ People/Portfolio view: project list should be view-only (no selection)
+        if (isPeopleView || isPortfolioView) return;
 
         const selectedProject = allProjects.find(
             (project) => project.projectParameters.projectName === projectName
@@ -300,8 +302,8 @@ const Projects = () => {
         }
     };
 
-    const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setSearchTerm(event.target.value || "");
+    const handleSearch = (value: string) => {
+        setSearchTerm(value || "");
     };
 
     const handleAddMember = () => {
@@ -428,146 +430,46 @@ const Projects = () => {
 
     const goToPeople = () => setRightPanelView("people");
     const goToProjects = () => setRightPanelView("project");
+    const goToPortfolio = () => setRightPanelView("portfolio");
+
 
     return (
         <>
-            <div className="project-container">
-                <div className="pppsdd">
-                    <div className="all-project-details">
-                        <div className="projects-header">
-                            <div className={`projects-header-actions ${!isPeopleView ? "tab-active" : ""}`}>
-                                <span className="people-link" onClick={goToProjects}>
-                                    Projects
-                                </span>
-                                <Button
-                                    type="text"
-                                    size="small"
-                                    className="header-icon-btn"
-                                    title="Projects"
-                                    icon={<RobotOutlined />}
-                                    onClick={goToProjects}
-                                />
-                            </div>
-
-                            <div className={`projects-header-actions ${isPeopleView ? "tab-active" : ""}`}>
-                                <span className="people-link" onClick={goToPeople}>
-                                    People
-                                </span>
-                                <Button
-                                    type="text"
-                                    size="small"
-                                    className="header-icon-btn"
-                                    title="People"
-                                    icon={<TeamOutlined />}
-                                    onClick={goToPeople}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="search">
-                            <Input
-                                size="small"
-                                placeholder={isPeopleView ? "Projects (view only)..." : "Find the projects..."}
-                                value={searchTerm}
-                                onChange={handleSearch}
-                                prefix={<SearchOutlined style={{ fontSize: "18px", color: "#ddd" }} />}
-                                style={{ height: "26px", fontSize: "12px" }}
-                            />
-                        </div>
-
-                        {filteredProjects.length === 0 ? (
-                            <div className="projects-empty-state">
-                                <div className="projects-empty-title">No matching projects found</div>
-                                <div className="projects-empty-subtitle">
-                                    {searchTerm.trim()
-                                        ? `No results for "${searchTerm.trim()}". Try project name, location, mineral, status, or member count.`
-                                        : "No project records available for the selected view."}
-                                </div>
-                            </div>
-                        ) : (
-                            filteredProjects.map((project) => {
-                            const isSelected = selectedProjectName === project.projectParameters.projectName;
-
-                            return (
-                                <div
-                                    key={project.projectParameters.projectName}
-                                    className={`project-item animated-item ${isSelected && !isPeopleView ? "focused-project" : ""}`}
-                                    onClick={() => handleProjectClick(project.projectParameters.projectName)}
-                                    style={isPeopleView ? { cursor: "default" } : undefined}
-                                    title={isPeopleView ? "People view is open. Projects are view-only." : undefined}
-                                >
-                                    <div className="project-info-block">
-                                        <div className="project-title">{project.projectParameters.projectName}</div>
-                                        <div className="project-meta">
-                                            <span className="desc">{getProjectInfoText(project)}</span>
-
-                                            <div className="date-range">
-                                                <span className="date-label">📅</span>
-                                                <span className="date-value">
-                                                    {project.startDate || "2024-03-01"} → {project.endDate || "2024-09-30"}
-                                                </span>
-                                            </div>
-
-                                            <div className="meta-row">
-                                                <span className="meta-item">👥 {project.memberCount ?? project.members?.length ?? 0} members</span>
-                                                <span className={`status-badge ${project.displayStatus === "Active" || project.displayStatus === "Tracking" ? "active" : "inactive"}`}>
-                                                    {project.displayStatus || "Planning"}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {!isPeopleView && (
-                                        <Dropdown overlay={menu(project)} trigger={["hover"]}>
-                                            <MoreOutlined className="three-dot-menu" />
-                                        </Dropdown>
-                                    )}
-                                </div>
-                            );
-                            })
-                        )}
-                    </div>
-                    <div className="create-project-btn-div">
-                        <div style={{ display: "flex", justifyContent: "center" }} onClick={() => navigate("/create/register-new-project")} >
-                            <Button
-                                type="text"
-                                size="small"
-                                onClick={() => navigate("/create/register-new-project")}
-                                className="create-project-btn"
-                            >
-                                <RobotOutlined style={{ marginRight: 6 }} />
-                                Create New Project
-                            </Button>
-                        </div>
-                    </div>
-                </div>
+            <div className={`project-container ${isPortfolioView ? "portfolio-only" : ""}`}>
+                {!isPortfolioView && (
+                    <ProjectsSidebar
+                        rightPanelView={rightPanelView}
+                        isPeopleView={isPeopleView}
+                        isPortfolioView={isPortfolioView}
+                        searchTerm={searchTerm}
+                        onSearch={handleSearch}
+                        filteredProjects={filteredProjects}
+                        selectedProjectName={selectedProjectName}
+                        onProjectClick={handleProjectClick}
+                        getProjectInfoText={getProjectInfoText}
+                        menu={menu}
+                        onCreateProject={() => navigate("/create/register-new-project")}
+                        goToProjects={goToProjects}
+                        goToPeople={goToPeople}
+                        goToPortfolio={goToPortfolio}
+                    />
+                )}
 
                 {isPeopleView ? (
                     <PeopleSearch />
+                ) : isPortfolioView ? (
+                    <PortfolioPanel
+                        portfolioTab={portfolioTab}
+                        onTabChange={setPortfolioTab}
+                        onBackToProjects={goToProjects}
+                    />
                 ) : (
-                    <section className="project-info">
-                        <div className="base-details">
-                            <div className="project-tabs-row">
-                                {tabs.map((tab) => (
-                                    <button
-                                        key={tab.key}
-                                        className={`tab-button ${activeTab === tab.key ? "active" : ""}`}
-                                        onClick={() => setActiveTab(tab.key)}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="details-paremeters">
-                            <div className="info-item">
-                                <div className="tab-container">
-                                    <div className="tab-content">{renderTabContent()}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+                    <ProjectTabsPanel
+                        tabs={tabs}
+                        activeTab={activeTab}
+                        onTabChange={setActiveTab}
+                        renderTabContent={renderTabContent}
+                    />
                 )}
             </div>
 

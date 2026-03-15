@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Select, Input, Form, Row, Col, Button, DatePicker, Modal, Typography, List } from "antd";
+import { Select, Input, Form, Row, Col, Button, DatePicker, Modal, Typography, List, Tooltip } from "antd";
 import "../styles/register-new-project.css";
-import { CloseCircleOutlined, DownloadOutlined, ExclamationCircleOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
+import { CloseCircleOutlined, DownloadOutlined, ExclamationCircleOutlined, InfoCircleOutlined, PlusOutlined, UploadOutlined } from "@ant-design/icons";
 // const { Option } = Select;
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { db } from "../Utils/dataStorege.ts";
@@ -71,6 +71,54 @@ export const RegisterNewProject: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const numericSuffixByKey: Record<string, string> = {
+    reserve: "MT",
+    netGeologicalReserve: "MT",
+    extractableReserve: "MT",
+    stripRatio: "m³/t",
+    peakCapacity: "MTPA",
+    mineLife: "years",
+    totalCoalBlockArea: "hectares",
+    pbgAmount: "₹ Cr",
+    totalProjectCost: "₹ Cr",
+    ebitdaPercentage: "%",
+    irrPercentage: "%",
+    npvPercentage: "%",
+    patPercentage: "%",
+    patPerTon: "₹/ton",
+    roePercentage: "%",
+    rocePercentage: "%",
+  };
+  const numericSuffixHelpByKey: Record<string, string> = {
+    reserve: "Million tonnes",
+    netGeologicalReserve: "Million tonnes",
+    extractableReserve: "Million tonnes",
+    stripRatio: "Bank cubic meter per tonne",
+    peakCapacity: "Million tonnes per annum",
+    mineLife: "Years",
+    totalCoalBlockArea: "Hectares",
+    pbgAmount: "Rupees in crore",
+    totalProjectCost: "Rupees in crore",
+    ebitdaPercentage: "Percent",
+    irrPercentage: "Percent",
+    npvPercentage: "Percent",
+    patPercentage: "Percent",
+    patPerTon: "Rupees per tonne",
+    roePercentage: "Percent",
+    rocePercentage: "Percent",
+  };
+
+  const renderUnitSuffix = (fieldKey: string) => {
+    const unit = numericSuffixByKey[fieldKey];
+    if (!unit) return undefined;
+    const help = numericSuffixHelpByKey[fieldKey];
+    if (!help) return unit;
+    return (
+      <Tooltip title={help}>
+        <span>{unit}</span>
+      </Tooltip>
+    );
+  };
 
   useEffect(() => {
     setFormData({});
@@ -453,6 +501,7 @@ export const RegisterNewProject: React.FC = () => {
                       type="text"
                       disabled
                       key={formData.companyName} value={formData.companyName || ""}
+                      placeholder="Enter company name"
                       onChange={(e) => handleChange("projectName", e.target.value)}
                     />
                     {/* <Button
@@ -476,19 +525,46 @@ export const RegisterNewProject: React.FC = () => {
                   <Input
                     type="text"
                     value={formData.projectName || ""}
+                    placeholder="Enter project name"
                     onChange={(e) => handleChange("projectName", e.target.value)}
                   />
                 </Form.Item>
               </Col>
               {[
-                { label: "Reserve", key: "reserve", type: "number" },
-                { label: "Net Geological Reserve", key: "netGeologicalReserve", type: "number" },
-                { label: "Extractable Reserve", key: "extractableReserve", type: "number" },
-                { label: "Strip Ratio", key: "stripRatio", type: "number" },
-                { label: "Peak Capacity", key: "peakCapacity", type: "number" },
-                { label: "Mine Life (years)", key: "mineLife", type: "number" },
-                { label: "Total Coal Block Area", key: "totalCoalBlockArea", type: "number" },
-              ].map(({ label, key, type }, index) => (
+                { label: "Reserve", labelText: "Reserve", key: "reserve", type: "number", placeholder: "Enter reserve" },
+                { label: "Net Geological Reserve", labelText: "Net Geological Reserve", key: "netGeologicalReserve", type: "number", placeholder: "Enter net reserve" },
+                { label: "Extractable Reserve", labelText: "Extractable Reserve", key: "extractableReserve", type: "number", placeholder: "Enter extractable reserve" },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Strip Ratio
+                      <Tooltip title="Bank cubic meter per tonne">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "Strip Ratio",
+                  key: "stripRatio",
+                  type: "number",
+                  placeholder: "Enter strip ratio",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Peak Capacity
+                      <Tooltip title="Million tonnes per annum">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "Peak Capacity",
+                  key: "peakCapacity",
+                  type: "number",
+                  placeholder: "Enter peak capacity",
+                },
+                { label: "Mine Life (years)", labelText: "Mine Life (years)", key: "mineLife", type: "number", placeholder: "Enter mine life" },
+                { label: "Total Coal Block Area", labelText: "Total Coal Block Area", key: "totalCoalBlockArea", type: "number", placeholder: "Enter total area" },
+              ].map(({ label, labelText, key, type, placeholder }, index) => (
                 <Col span={12} key={key}>
                   <Form.Item
                     colon={false}
@@ -497,12 +573,14 @@ export const RegisterNewProject: React.FC = () => {
                     labelCol={{ span: 10 }}
                     wrapperCol={{ span: 14 }}
                     validateStatus={errors[key] ? "error" : ""}
-                    help={errors[key] ? `${label} is required` : ""}
+                    help={errors[key] ? `${labelText} is required` : ""}
                   >
                     <Input
                       style={{ marginLeft: index % 2 === 0 ? "4px" : "0", marginRight: index % 2 !== 0 ? "4px" : "0" }}
                       type={type}
                       value={formData[key] || ""}
+                      placeholder={placeholder}
+                      suffix={renderUnitSuffix(key)}
                       onChange={(e) => handleChange(key, e.target.value)}
                     />
                   </Form.Item>
@@ -518,7 +596,11 @@ export const RegisterNewProject: React.FC = () => {
                   validateStatus={errors.mineral ? "error" : ""}
                   help={errors.mineral ? "Mineral is required" : ""}
                 >
-                  <Select value={formData.mineral || ""} onChange={(value) => handleChange("mineral", value)}>
+                  <Select
+                    value={formData.mineral ? formData.mineral : undefined}
+                    placeholder="Select mineral"
+                    onChange={(value) => handleChange("mineral", value)}
+                  >
                     {["Coal", "Iron"].map((option) => (
                       <Select.Option key={option} value={option}>
                         {option}
@@ -539,8 +621,9 @@ export const RegisterNewProject: React.FC = () => {
                 >
                   <div style={{ display: 'flex', gap: "10px" }}>
                     <Select
-                      value={formData.typeOfMine || ""}
+                      value={formData.typeOfMine ? formData.typeOfMine : undefined}
                       style={{ marginLeft: "4px" }}
+                      placeholder="Select type of mine"
                       disabled={isEditMode && projectTimeline.length > 0}
                       onChange={(value) => {
                         handleChange("typeOfMine", value);
@@ -575,7 +658,12 @@ export const RegisterNewProject: React.FC = () => {
                   validateStatus={errors.grade ? "error" : ""}
                   help={errors.grade ? "Grade is required" : ""}
                 >
-                  <Select allowClear={false} value={formData.grade || ""} onChange={(value) => handleChange("grade", value)}>
+                  <Select
+                    allowClear={false}
+                    value={formData.grade ? formData.grade : undefined}
+                    placeholder="Select coal grade"
+                    onChange={(value) => handleChange("grade", value)}
+                  >
                     {["Grade A", "Grade B"].map((option) => (
                       <Select.Option key={option} value={option}>
                         {option}
@@ -603,18 +691,19 @@ export const RegisterNewProject: React.FC = () => {
                 >
                   <Input
                     value={formData["mineLocation"] || ""}
+                    placeholder="Enter mine location"
                     onChange={(e) => handleChange("mineLocation", e.target.value)}
                   />
                 </Form.Item>
               </Col>
 
               {[
-                { label: "State", key: "state" },
-                { label: "District", key: "district" },
-                { label: "Nearest Town", key: "nearestTown" },
-                { label: "Nearest Airport", key: "nearestAirport" },
-                { label: "Nearest Railway Station", key: "nearestRailwayStation" },
-              ].map(({ label, key }) => (
+                { label: "State", key: "state", placeholder: "Enter state" },
+                { label: "District", key: "district", placeholder: "Enter district" },
+                { label: "Nearest Town", key: "nearestTown", placeholder: "Enter nearest town" },
+                { label: "Nearest Airport", key: "nearestAirport", placeholder: "Enter nearest airport" },
+                { label: "Nearest Railway Station", key: "nearestRailwayStation", placeholder: "Enter nearest railway station" },
+              ].map(({ label, key, placeholder }) => (
                 <Col span={24} key={key}>
                   <Form.Item
                     colon={false}
@@ -627,6 +716,7 @@ export const RegisterNewProject: React.FC = () => {
                   >
                     <Input
                       value={formData[key] || ""}
+                      placeholder={placeholder}
                       onChange={(e) => handleChange(key, e.target.value)}
                     />
                   </Form.Item>
@@ -649,14 +739,18 @@ export const RegisterNewProject: React.FC = () => {
                   validateStatus={errors.mineOwner ? "error" : ""}
                   help={errors.mineOwner ? "Mine Owner is required" : ""}
                 >
-                  <Input value={formData.mineOwner || ""} onChange={(e) => handleChange("mineOwner", e.target.value)} />
+                  <Input
+                    value={formData.mineOwner || ""}
+                    placeholder="Enter mine owner name"
+                    onChange={(e) => handleChange("mineOwner", e.target.value)}
+                  />
                 </Form.Item>
               </Col>
               {[
-                { label: "Date of H1 Bidder", key: "dateOfH1Bidder" },
-                { label: "CBDPA Date", key: "cbdpaDate" },
-                { label: "Vesting Order Date", key: "vestingOrderDate" },
-              ].map(({ label, key }) => (
+                { label: "Date of H1 Bidder", key: "dateOfH1Bidder", placeholder: "Select H1 bidder date (DD-MM-YYYY)" },
+                { label: "CBDPA Date", key: "cbdpaDate", placeholder: "Select CBDPA date (DD-MM-YYYY)" },
+                { label: "Vesting Order Date", key: "vestingOrderDate", placeholder: "Select vesting order date (DD-MM-YYYY)" },
+              ].map(({ label, key, placeholder }) => (
                 <Col span={24} key={key}>
                   <Form.Item
                     colon={false}
@@ -670,6 +764,9 @@ export const RegisterNewProject: React.FC = () => {
                     <DatePicker
                       style={{ width: "100%" }}
                       value={toDayjs(formData[key])}
+                      placeholder={placeholder}
+                      format="DD-MM-YYYY"
+                      inputReadOnly={false}
                       onChange={(date) => handleChange(key, date ? date.toISOString() : null)}
                     />
 
@@ -679,14 +776,27 @@ export const RegisterNewProject: React.FC = () => {
               <Col span={24}>
                 <Form.Item
                   colon={false}
-                  label="PBG Amount"
+                  label={(
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      PBG Amount
+                      <Tooltip title="Performance Bank Guarantee amount">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  )}
                   labelAlign="left"
                   labelCol={{ span: 6 }}
                   wrapperCol={{ span: 18 }}
                   validateStatus={errors.pbgAmount ? "error" : ""}
                   help={errors.pbgAmount ? "PBG Amount is required" : ""}
                 >
-                  <Input type="number" value={formData.pbgAmount || ""} onChange={(e) => handleChange("pbgAmount", e.target.value)} />
+                  <Input
+                    type="number"
+                    value={formData.pbgAmount || ""}
+                    placeholder="Enter PBG amount"
+                    suffix={renderUnitSuffix("pbgAmount")}
+                    onChange={(e) => handleChange("pbgAmount", e.target.value)}
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -741,15 +851,111 @@ export const RegisterNewProject: React.FC = () => {
           <Form style={{ marginTop: "15px" }} layout="horizontal">
             <Row gutter={[16, 16]}>
               {[
-                { label: "Total Project cost", key: "totalProjectCost" },
-                { label: "EBITDA Percentage", key: "ebitdaPercentage" },
-                { label: "IRR (%)", key: "irrPercentage" },
-                { label: "NPV (%)", key: "npvPercentage" },
-                { label: "PAT (%)", key: "patPercentage" },
-                { label: "PAT / Ton", key: "patPerTon" },
-                { label: "ROE %", key: "roePercentage" },
-                { label: "ROCE%", key: "rocePercentage" },
-              ].map(({ label, key }) => (
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Total Project cost
+                      <Tooltip title="Total project cost in ₹ crore">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "Total Project cost",
+                  key: "totalProjectCost",
+                  placeholder: "Enter total project cost",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      EBITDA Percentage
+                      <Tooltip title="Earnings before interest, taxes, depreciation and amortization">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "EBITDA Percentage",
+                  key: "ebitdaPercentage",
+                  placeholder: "Enter EBITDA",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      IRR (%)
+                      <Tooltip title="Internal rate of return">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "IRR (%)",
+                  key: "irrPercentage",
+                  placeholder: "Enter IRR",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      NPV (%)
+                      <Tooltip title="Net present value">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "NPV (%)",
+                  key: "npvPercentage",
+                  placeholder: "Enter NPV",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      PAT (%)
+                      <Tooltip title="Profit after tax">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "PAT (%)",
+                  key: "patPercentage",
+                  placeholder: "Enter PAT",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      PAT / Ton
+                      <Tooltip title="Profit after tax per tonne">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "PAT / Ton",
+                  key: "patPerTon",
+                  placeholder: "Enter PAT per ton",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      ROE %
+                      <Tooltip title="Return on equity">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "ROE %",
+                  key: "roePercentage",
+                  placeholder: "Enter ROE",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      ROCE%
+                      <Tooltip title="Return on capital employed">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "ROCE%",
+                  key: "rocePercentage",
+                  placeholder: "Enter ROCE",
+                },
+              ].map(({ label, labelText, key, placeholder }) => (
                 <Col span={24} key={key}>
                   <Form.Item
                     colon={false}
@@ -758,10 +964,12 @@ export const RegisterNewProject: React.FC = () => {
                     labelCol={{ span: 6 }}
                     wrapperCol={{ span: 18 }}
                     validateStatus={errors[key] ? "error" : ""}
-                    help={errors[key] ? `${label} is required` : ""}
+                    help={errors[key] ? `${labelText} is required` : ""}
                   >
                     <Input
                       value={formData[key] || ""}
+                      placeholder={placeholder}
+                      suffix={renderUnitSuffix(key)}
                       onChange={(e) => handleChange(key, e.target.value)}
                     />
                   </Form.Item>

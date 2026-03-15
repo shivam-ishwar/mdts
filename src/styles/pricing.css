@@ -24,7 +24,7 @@
 .toggle-section {
     background: var(--bg-muted);
     display: inline-flex;
-    border-radius: 30px;
+    border-radius: var(--radius-md);
     padding: 5px;
     margin-bottom: 2rem;
     border: 1px solid var(--border);
@@ -34,7 +34,7 @@
     background: transparent;
     border: none;
     padding: .6rem 1.2rem;
-    border-radius: 30px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     font-weight: 700;
     color: var(--text-primary);
@@ -57,7 +57,7 @@
     color: var(--text-inverse);
     padding: .2rem .45rem;
     margin-left: .35rem;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     font-weight: 800;
 }
 
@@ -115,7 +115,7 @@
     font-size: .75rem;
     padding: .2rem .55rem;
     margin-left: .5rem;
-    border-radius: 8px;
+    border-radius: var(--radius-md);
     font-weight: 800;
     border: 1px solid rgba(31, 122, 99, .28);
 }
@@ -205,7 +205,7 @@
     color: var(--text-inverse);
     border: none;
     padding: .9rem 1.8rem;
-    border-radius: 30px;
+    border-radius: var(--radius-md);
     font-size: 1rem;
     font-weight: 800;
     cursor: pointer;

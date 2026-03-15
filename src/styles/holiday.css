@@ -45,7 +45,7 @@
   background: transparent;
   padding: 10px;
   border: 1px solid var(--hc-border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   box-shadow: var(--hc-shadow);
 }
 
@@ -63,7 +63,7 @@
 
 .holiday-btn.ant-btn {
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-weight: 800;
   padding: 0 12px;
   border: 1px solid var(--hc-border);
@@ -97,7 +97,7 @@
   overflow-y: auto !important;
   overflow-x: hidden !important;
   border: 1px solid var(--hc-border);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--hc-surface);
   box-shadow: var(--hc-shadow);
 }
@@ -150,7 +150,7 @@
 
 .holiday-input.ant-input,
 .holiday-input .ant-input {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--hc-border);
   background: var(--hc-surface);
   color: var(--hc-text);
@@ -166,7 +166,7 @@
 }
 
 .holiday-select .ant-select-selector {
-  border-radius: 10px !important;
+  border-radius: var(--radius-md)!important;
   border-color: var(--hc-border) !important;
   background: var(--hc-surface) !important;
   color: var(--hc-text) !important;
@@ -211,7 +211,7 @@
 
 .holiday-impact-input .MuiInputBase-root {
   width: 60px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--hc-surface);
   color: var(--hc-text);
 }
@@ -247,7 +247,7 @@
   min-width: 36px;
   height: 36px;
   padding: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--hc-border);
   background: var(--hc-surface);
   color: var(--hc-text);
@@ -291,7 +291,7 @@
 .holiday-right {
   width: 35%;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   display: grid;
   grid-template-columns: repeat(1, 1fr);
   gap: 10px;
@@ -307,14 +307,14 @@
 .holiday-right .react-calendar {
   width: 100%;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
 .holiday-right .react-calendar__navigation button {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-weight: 800;
   color: var(--text-primary);
 }
@@ -326,7 +326,7 @@
 }
 
 .holiday-right .react-calendar__tile {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .holiday-right .react-calendar__tile:enabled:hover,
@@ -354,7 +354,7 @@
 }
 
 .modal-container .ant-modal-content {
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
@@ -382,7 +382,7 @@
   background: var(--error);
   border-color: transparent;
   font-weight: 800;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   height: 36px;
   padding: 0 16px;
 }
@@ -392,7 +392,7 @@
 }
 
 .modal-container .ant-btn-default {
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   height: 36px;
   border-color: var(--border);
   color: var(--text-primary);
