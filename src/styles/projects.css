@@ -11,10 +11,6 @@
     margin: 10px;
 }
 
-.project-container.portfolio-only {
-    grid-template-columns: minmax(0, 1fr);
-}
-
 .project-container * {
     box-sizing: border-box;
 }

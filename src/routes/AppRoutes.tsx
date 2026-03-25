@@ -38,6 +38,7 @@ import ActivityBudget from "../pages/ActivityBudget";
 import ActivityCost from "../pages/ActivityCost";
 import CommercialActivityPlanner from "../pages/ComercialActivityPlanner";
 import ManageRaci from "../pages/ManageRaci";
+import StandardizationLinks from "../pages/StandardizationLinks";
 import Dashboard from "../Components/Dashboard";
 import { userStore } from "../Utils/UserStore";
 
@@ -130,6 +131,15 @@ const AppRoutes = () => {
                         element={
                             <ProtectedRoute action="UPDATE_STATUS">
                                 <StatusUpdate />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/create/standardization-links"
+                        element={
+                            <ProtectedRoute action="UPDATE_STATUS">
+                                <StandardizationLinks />
                             </ProtectedRoute>
                         }
                     />

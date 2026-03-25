@@ -286,8 +286,7 @@ const Projects = () => {
     }
 
     const handleProjectClick = (projectName: string) => {
-        // ✅ People/Portfolio view: project list should be view-only (no selection)
-        if (isPeopleView || isPortfolioView) return;
+        if (isPeopleView) return;
 
         const selectedProject = allProjects.find(
             (project) => project.projectParameters.projectName === projectName
@@ -435,25 +434,23 @@ const Projects = () => {
 
     return (
         <>
-            <div className={`project-container ${isPortfolioView ? "portfolio-only" : ""}`}>
-                {!isPortfolioView && (
-                    <ProjectsSidebar
-                        rightPanelView={rightPanelView}
-                        isPeopleView={isPeopleView}
-                        isPortfolioView={isPortfolioView}
-                        searchTerm={searchTerm}
-                        onSearch={handleSearch}
-                        filteredProjects={filteredProjects}
-                        selectedProjectName={selectedProjectName}
-                        onProjectClick={handleProjectClick}
-                        getProjectInfoText={getProjectInfoText}
-                        menu={menu}
-                        onCreateProject={() => navigate("/create/register-new-project")}
-                        goToProjects={goToProjects}
-                        goToPeople={goToPeople}
-                        goToPortfolio={goToPortfolio}
-                    />
-                )}
+            <div className="project-container">
+                <ProjectsSidebar
+                    rightPanelView={rightPanelView}
+                    isPeopleView={isPeopleView}
+                    isPortfolioView={isPortfolioView}
+                    searchTerm={searchTerm}
+                    onSearch={handleSearch}
+                    filteredProjects={filteredProjects}
+                    selectedProjectName={selectedProjectName}
+                    onProjectClick={handleProjectClick}
+                    getProjectInfoText={getProjectInfoText}
+                    menu={menu}
+                    onCreateProject={() => navigate("/create/register-new-project")}
+                    goToProjects={goToProjects}
+                    goToPeople={goToPeople}
+                    goToPortfolio={goToPortfolio}
+                />
 
                 {isPeopleView ? (
                     <PeopleSearch />
@@ -461,7 +458,6 @@ const Projects = () => {
                     <PortfolioPanel
                         portfolioTab={portfolioTab}
                         onTabChange={setPortfolioTab}
-                        onBackToProjects={goToProjects}
                     />
                 ) : (
                     <ProjectTabsPanel

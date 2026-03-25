@@ -5,50 +5,6 @@
     box-sizing: border-box;
 }
 
-.pf-hero {
-    border-radius: var(--radius-md);
-    padding: 10px;
-    /* background: linear-gradient(135deg, rgba(31, 122, 99, 0.12), rgba(23, 37, 84, 0.08)); */
-    border: 1px solid rgba(31, 122, 99, 0.2);
-    box-shadow: var(--shadow-md);
-    margin-bottom: 12px;
-    position: relative;
-}
-
-.pf-title {
-    font-size: 20px;
-    font-weight: 800;
-    color: grey;
-    letter-spacing: 0.2px;
-}
-
-.pf-subtitle {
-    font-size: 12.5px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-}
-
-.pf-back-btn {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    border: 1px solid rgba(31, 122, 99, 0.25);
-    background: var(--bg-surface);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 700;
-    padding: 6px 10px;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: background 0.16s ease, color 0.16s ease, transform 0.12s ease;
-}
-
-.pf-back-btn:hover {
-    background: rgba(31, 122, 99, 0.12);
-    color: var(--color-primary);
-    transform: translateY(-1px);
-}
-
 .pf-metrics {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -203,7 +159,7 @@
 }
 
 .pf-tab-content {
-    height: calc(100vh - 275px);
+    height: calc(100vh - 175px);
     overflow-y: auto;
     overflow-x: auto;
 }

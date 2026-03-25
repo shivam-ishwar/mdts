@@ -407,7 +407,6 @@ textarea:disabled {
   line-height: 1.4;
   font-weight: 600;
   color: var(--text-secondary);
-  margin-bottom: 6px
 }
 
 .help {

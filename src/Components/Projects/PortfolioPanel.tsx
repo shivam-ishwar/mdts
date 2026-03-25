@@ -5,28 +5,14 @@ import PortfolioStats from "./PortfolioStats.tsx";
 interface PortfolioPanelProps {
     portfolioTab: "technicality" | "projectStats";
     onTabChange: (tab: "technicality" | "projectStats") => void;
-    onBackToProjects: () => void;
 }
 
 const PortfolioPanel = ({
     portfolioTab,
     onTabChange,
-    onBackToProjects,
 }: PortfolioPanelProps) => {
     return (
         <section className="pf-section">
-            <div className="pf-hero">
-                <button className="pf-back-btn" onClick={onBackToProjects}>
-                    ← Back to Projects
-                </button>
-                <div className="pf-title-block">
-                    <div className="pf-title">Project Portfolio</div>
-                    <div className="pf-subtitle">
-                        A unified snapshot of all projects, focused on technical clarity and performance signals.
-                    </div>
-                </div>
-            </div>
-
             <div className="pf-tabs">
                 <div className="pf-tabs-row">
                     <button

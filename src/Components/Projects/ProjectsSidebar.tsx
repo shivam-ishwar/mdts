@@ -2,7 +2,12 @@ import { Input, Button, Dropdown } from "antd";
 import type { ReactElement } from "react";
 import "../../styles/ProjectsSidebar.css";
 import { SearchOutlined } from "@mui/icons-material";
-import { MoreOutlined, RobotOutlined, TeamOutlined, BarChartOutlined } from "@ant-design/icons";
+import {
+    MoreOutlined,
+    RobotOutlined,
+    TeamOutlined,
+    BarChartOutlined,
+} from "@ant-design/icons";
 
 interface ProjectsSidebarProps {
     rightPanelView: "project" | "people" | "portfolio";
@@ -87,11 +92,7 @@ const ProjectsSidebar = ({
                 <div className="ps-search">
                     <Input
                         size="small"
-                        placeholder={
-                            isPeopleView || isPortfolioView
-                                ? "Projects (view only)..."
-                                : "Find the projects..."
-                        }
+                        placeholder={isPeopleView ? "Projects (view only)..." : "Find the projects..."}
                         value={searchTerm}
                         onChange={(event) => onSearch(event.target.value || "")}
                         prefix={<SearchOutlined style={{ fontSize: "18px", color: "#ddd" }} />}
@@ -119,9 +120,9 @@ const ProjectsSidebar = ({
                                     isSelected && !isPeopleView && !isPortfolioView ? "ps-focused" : ""
                                 }`}
                                 onClick={() => onProjectClick(project.projectParameters.projectName)}
-                                style={isPeopleView || isPortfolioView ? { cursor: "default" } : undefined}
+                                style={isPeopleView ? { cursor: "default" } : undefined}
                                 title={
-                                    isPeopleView || isPortfolioView
+                                    isPeopleView
                                         ? "View-only mode is open. Projects are not selectable."
                                         : undefined
                                 }

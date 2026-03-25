@@ -159,6 +159,28 @@ export interface ActivityBudgetDocument {
   uploadedBy?: string;
 }
 
+export interface StandardizedActivity {
+  id?: number;
+  orgId: string;
+  projectId?: string;
+  projectName?: string;
+  timelineId?: string;
+  version?: string;
+  moduleCode?: string;
+  moduleName?: string;
+  activityCode: string;
+  activityName?: string;
+  standardizedName: string;
+  updatedAt?: string;
+}
+
+export interface StandardizationMaster {
+  id?: number;
+  orgId: string;
+  name: string;
+  updatedAt?: string;
+}
+
 export interface NotificationRead {
   id: string;
   notificationId: string;
@@ -184,6 +206,8 @@ export class DataStorage extends Dexie {
   activityCosts!: Table<ActivityCost, number>;
   commercialActivities!: Table<CommercialActivity, number>;
   activityBudgetDocs!: Table<ActivityBudgetDocument, number>;
+  standardizedActivities!: Table<StandardizedActivity, number>;
+  standardizationMasters!: Table<StandardizationMaster, number>;
   knowledgePosts!: Table<KnowledgePost, number>;
   knowledgeComments!: Table<KnowledgeComment, number>;
   knowledgeReactions!: Table<KnowledgeReaction & { id?: number; postId: number }, number>;
@@ -247,6 +271,19 @@ export class DataStorage extends Dexie {
       notificationReads: "id, notificationId, userId, orgId, readAt",
     });
 
+    this.version(10).stores({
+      standardizedActivities: "++id, orgId, projectId, activityCode, standardizedName, [projectId+activityCode], [orgId+standardizedName]",
+    });
+
+    this.version(11).stores({
+      standardizedActivities: "++id, orgId, moduleCode, activityCode, standardizedName, [orgId+standardizedName], [orgId+moduleCode+activityCode]",
+    });
+
+    this.version(12).stores({
+      standardizedActivities: "++id, orgId, moduleCode, activityCode, standardizedName, [orgId+standardizedName], [orgId+moduleCode+activityCode]",
+      standardizationMasters: "++id, orgId, name, [orgId+name]",
+    });
+
     this.mineTypes = this.table("mineTypes");
     this.modules = this.table("modules");
     this.moduleLibrary = this.table("moduleLibrary");
@@ -262,6 +299,8 @@ export class DataStorage extends Dexie {
     this.activityCosts = this.table("activityCosts");
     this.commercialActivities = this.table("commercialActivities");
     this.activityBudgetDocs = this.table("activityBudgetDocs");
+    this.standardizedActivities = this.table("standardizedActivities");
+    this.standardizationMasters = this.table("standardizationMasters");
     this.knowledgePosts = this.table("knowledgePosts");
     this.knowledgeComments = this.table("knowledgeComments");
     this.knowledgeReactions = this.table("knowledgeReactions");
@@ -829,6 +868,168 @@ export class DataStorage extends Dexie {
 
   async deleteActivityBudgetDoc(id: number): Promise<void> {
     await this.activityBudgetDocs.delete(id);
+  }
+
+  async upsertStandardizedActivity(
+    data: Omit<StandardizedActivity, "id" | "updatedAt">
+  ): Promise<number> {
+    const orgId = String(data.orgId);
+    const moduleCode = String(data.moduleCode || "");
+    const activityCode = String(data.activityCode);
+
+    const existing = await this.standardizedActivities
+      .where("[orgId+moduleCode+activityCode]")
+      .equals([orgId, moduleCode, activityCode])
+      .first();
+
+    const payload: StandardizedActivity = {
+      ...(existing || {}),
+      ...data,
+      orgId,
+      moduleCode,
+      activityCode,
+      standardizedName: String(data.standardizedName).trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existing?.id) {
+      await this.standardizedActivities.update(existing.id, payload);
+      return existing.id;
+    }
+
+    return this.standardizedActivities.add(payload);
+  }
+
+  async getStandardizedActivity(
+    orgId: string,
+    moduleCode: string,
+    activityCode: string
+  ): Promise<StandardizedActivity | null> {
+    const record = await this.standardizedActivities
+      .where("[orgId+moduleCode+activityCode]")
+      .equals([String(orgId), String(moduleCode), String(activityCode)])
+      .first();
+
+    return record ?? null;
+  }
+
+  async getStandardizedActivitiesByOrg(orgId: string): Promise<StandardizedActivity[]> {
+    return this.standardizedActivities
+      .where("orgId")
+      .equals(String(orgId))
+      .toArray();
+  }
+
+  async getStandardizedActivitiesByName(
+    orgId: string,
+    standardizedName: string
+  ): Promise<StandardizedActivity[]> {
+    return this.standardizedActivities
+      .where("[orgId+standardizedName]")
+      .equals([String(orgId), String(standardizedName).trim()])
+      .toArray();
+  }
+
+  async upsertStandardizationMaster(
+    data: Omit<StandardizationMaster, "id" | "updatedAt">,
+    existingId?: number
+  ): Promise<number> {
+    const orgId = String(data.orgId);
+    const name = String(data.name).trim();
+
+    const duplicate = await this.standardizationMasters
+      .where("[orgId+name]")
+      .equals([orgId, name])
+      .first();
+
+    if (duplicate?.id && duplicate.id !== existingId) {
+      throw new Error("Standardization name already exists.");
+    }
+
+    const payload: StandardizationMaster = {
+      ...(existingId ? ((await this.standardizationMasters.get(existingId)) || {}) : {}),
+      ...data,
+      orgId,
+      name,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (existingId) {
+      await this.standardizationMasters.update(existingId, payload);
+      return existingId;
+    }
+
+    return this.standardizationMasters.add(payload);
+  }
+
+  async getStandardizationMastersByOrg(orgId: string): Promise<StandardizationMaster[]> {
+    return this.standardizationMasters
+      .where("orgId")
+      .equals(String(orgId))
+      .toArray();
+  }
+
+  async renameStandardizationMaster(
+    orgId: string,
+    previousName: string,
+    nextName: string,
+    masterId?: number
+  ): Promise<void> {
+    const trimmedPrevious = String(previousName).trim();
+    const trimmedNext = String(nextName).trim();
+    if (!trimmedPrevious || !trimmedNext) return;
+
+    await this.upsertStandardizationMaster(
+      { orgId: String(orgId), name: trimmedNext },
+      masterId
+    );
+
+    const records = await this.getStandardizedActivitiesByName(String(orgId), trimmedPrevious);
+    for (const record of records) {
+      await this.upsertStandardizedActivity({
+        orgId: String(record.orgId),
+        projectId: record.projectId,
+        projectName: record.projectName,
+        timelineId: String(record.timelineId || ""),
+        version: String(record.version || ""),
+        moduleCode: String(record.moduleCode || ""),
+        moduleName: String(record.moduleName || ""),
+        activityCode: String(record.activityCode || ""),
+        activityName: String(record.activityName || ""),
+        standardizedName: trimmedNext,
+      });
+    }
+  }
+
+  async deleteStandardizationMaster(id: number): Promise<void> {
+    await this.standardizationMasters.delete(id);
+  }
+
+  async deleteStandardizedActivity(
+    orgId: string,
+    moduleCode: string,
+    activityCode: string
+  ): Promise<void> {
+    const existing = await this.standardizedActivities
+      .where("[orgId+moduleCode+activityCode]")
+      .equals([String(orgId), String(moduleCode), String(activityCode)])
+      .first();
+
+    if (existing?.id) {
+      await this.standardizedActivities.delete(existing.id);
+    }
+  }
+
+  async deleteStandardizedActivitiesByName(
+    orgId: string,
+    standardizedName: string
+  ): Promise<void> {
+    const records = await this.getStandardizedActivitiesByName(orgId, standardizedName);
+    await this.standardizedActivities.bulkDelete(
+      records
+        .map((item) => item.id)
+        .filter((id): id is number => typeof id === "number")
+    );
   }
 
   async deleteDiskEntry(path: string): Promise<void> {

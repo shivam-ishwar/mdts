@@ -50,6 +50,7 @@ const initialNavLinks: any[] = [
             { label: "Modules", action: "/modules", requiredPermission: "CREATE_MODULE" },
             { label: "Timeline Builder", action: "/create/timeline-builder", requiredPermission: "BUILD_TIMEBUILDER" },
             { label: "Status Update", action: "/create/status-update", requiredPermission: "UPDATE_STATUS" },
+            { label: "Standardization Links", action: "/create/standardization-links", requiredPermission: "UPDATE_STATUS" },
             { label: "Non-working Days", action: "/create/non-working-days", requiredPermission: "SET_GLOBAL_HOLIDAY" },
             { label: "DPR Cost Builder", action: "/create/dpr-cost-builder", isNull: true, requiredPermission: "DPR_COST_BUILDER" },
             { label: "Documents", action: "/document", requiredPermission: "VIEW_NAVBAR_MENUS" },

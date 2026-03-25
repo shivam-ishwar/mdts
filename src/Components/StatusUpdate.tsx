@@ -74,7 +74,9 @@ export const StatusUpdate = () => {
   const [confirmReplan, setConfirmReplan] = useState(false);
   const [userOptions, setUserOptions] = useState<any>([]);
   const [openResponsibilityModal, setOpenResponsibilityModal] = useState(false);
+  const [openStandardizeModal, setOpenStandardizeModal] = useState(false);
   const [raciForm] = Form.useForm();
+  const [standardizeForm] = Form.useForm();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isEditUser, setIsEditUser] = useState(false);
   const [isStatusUpdateMode, setIsStatusUpdateMode] = useState(false);
@@ -106,6 +108,9 @@ export const StatusUpdate = () => {
   const [costLoading, setCostLoading] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [activityDetailsVisible, setActivityDetailsVisible] = useState(false);
+  const [standardizationGroupRecords, setStandardizationGroupRecords] = useState<any[]>([]);
+  const [standardizationLoading, setStandardizationLoading] = useState(false);
+  const [standardizationMasterOptions, setStandardizationMasterOptions] = useState<any[]>([]);
   const userMap = useMemo(
     () => Object.fromEntries(userOptions.map((u: any) => [u.id, u.name])),
     [userOptions]
@@ -123,8 +128,27 @@ export const StatusUpdate = () => {
   useEffect(() => {
     if (currentUser && currentUser.orgId) {
       defaultSetup();
+      loadStandardizationMasters(currentUser.orgId);
     }
   }, [currentUser]);
+
+  const loadStandardizationMasters = async (orgId?: string) => {
+    if (!orgId) {
+      setStandardizationMasterOptions([]);
+      return;
+    }
+
+    const masters = await db.getStandardizationMastersByOrg(String(orgId));
+    const options = masters
+      .slice()
+      .sort((a: any, b: any) => String(a?.name || "").localeCompare(String(b?.name || "")))
+      .map((master: any) => ({
+        label: String(master?.name || ""),
+        value: String(master?.name || ""),
+      }));
+
+    setStandardizationMasterOptions(options);
+  };
 
   useEffect(() => {
     if (location.state && location.state.currentProject) {
@@ -169,6 +193,30 @@ export const StatusUpdate = () => {
       }
     }
   }, [openResponsibilityModal, selectedActivityKey]);
+
+  useEffect(() => {
+    if (openStandardizeModal && selectedActivityKey) {
+      const hydrateForm = async () => {
+        const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+        if (!selection?.activity || !currentUser?.orgId) {
+          standardizeForm.resetFields();
+          return;
+        }
+
+        const existing = await db.getStandardizedActivity(
+          String(currentUser.orgId),
+          String(selection.module?.Code || ""),
+          String(selection.activity.Code)
+        );
+
+        standardizeForm.setFieldsValue({
+          standerizeName: existing?.standardizedName || undefined,
+        });
+      };
+
+      hydrateForm();
+    }
+  }, [openStandardizeModal, selectedActivityKey, dataSource, currentUser, standardizeForm]);
 
   useEffect(() => {
     if (replaneMode) {
@@ -1859,6 +1907,15 @@ export const StatusUpdate = () => {
     raciForm.resetFields();
   };
 
+  const handleOpenStandardizeModal = () => {
+    setOpenStandardizeModal(true);
+  };
+
+  const handleCloseStandardizeModal = () => {
+    setOpenStandardizeModal(false);
+    standardizeForm.resetFields();
+  };
+
   const handleRaciChange = async () => {
     try {
       await raciForm.validateFields();
@@ -1877,6 +1934,62 @@ export const StatusUpdate = () => {
       }
     }
     return null;
+  };
+
+  const findActivitySelectionByKey = (list: any[], key: string): { module: any; activity: any } | null => {
+    for (const item of list) {
+      if (item.children?.length) {
+        const activity = item.children.find((child: any) => child.key == key);
+        if (activity) {
+          return { module: item, activity };
+        }
+      }
+    }
+    return null;
+  };
+
+  const standerizeNameValue = Form.useWatch("standerizeName", standardizeForm);
+
+  const handleSaveStandardize = async () => {
+    try {
+      const values = await standardizeForm.validateFields();
+      const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+
+      if (!currentUser?.orgId || !selection?.activity || !selection?.module) {
+        notify.error("Unable to save standerize mapping.");
+        return;
+      }
+
+      const resolvedName = String(
+        values.standerizeName ||
+          selection.activity?.keyActivity ||
+          ""
+      ).trim();
+
+      if (!resolvedName) {
+        notify.error("Unable to resolve standerize name.");
+        return;
+      }
+
+      await db.upsertStandardizedActivity({
+        orgId: String(currentUser.orgId),
+        projectId: String(selectedProjectId || ""),
+        projectName: String(selectedProject?.projectParameters?.projectName || selectedProject?.name || ""),
+        timelineId: String(selectedProjectTimeline?.versionId || selectedProjectTimeline?.timelineId || ""),
+        version: String(selectedProjectTimeline?.version || ""),
+        moduleCode: String(selection.module?.Code || ""),
+        moduleName: String(selection.module?.keyActivity || selection.module?.moduleName || ""),
+        activityCode: String(selection.activity?.Code || ""),
+        activityName: String(selection.activity?.keyActivity || selection.activity?.activityName || ""),
+        standardizedName: resolvedName,
+      });
+
+      notify.success("Activity standardized successfully.");
+      loadStandardizationMasters(String(currentUser.orgId));
+      handleCloseStandardizeModal();
+    } catch (error) {
+      console.error("Standardize validation failed:", error);
+    }
   };
 
   const handleConfirm = async () => {
@@ -2589,6 +2702,7 @@ export const StatusUpdate = () => {
     // reset previous data
     setActivityBudget(null);
     setActivityCost(null);
+    setStandardizationGroupRecords([]);
 
     if (!selectedProjectId || !record.Code) {
       return;
@@ -2613,6 +2727,57 @@ export const StatusUpdate = () => {
       setBudgetLoading(false);
       setCostLoading(false);
     }
+  };
+
+  useEffect(() => {
+    const loadStandardizationGroup = async () => {
+      if (!activityDetailsVisible || !selectedActivity?.Code || !currentUser?.orgId) {
+        setStandardizationGroupRecords([]);
+        return;
+      }
+
+      try {
+        setStandardizationLoading(true);
+        const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+        if (!selection?.module) {
+          setStandardizationGroupRecords([]);
+          return;
+        }
+        const currentRecord = await db.getStandardizedActivity(
+          String(currentUser.orgId),
+          String(selection.module?.Code || ""),
+          String(selectedActivity.Code)
+        );
+
+        if (!currentRecord?.standardizedName) {
+          setStandardizationGroupRecords([]);
+          return;
+        }
+
+        const linked = await db.getStandardizedActivitiesByName(
+          String(currentUser.orgId),
+          String(currentRecord.standardizedName)
+        );
+
+        setStandardizationGroupRecords(linked);
+      } catch (error) {
+        console.error("Failed to load standardization details", error);
+        setStandardizationGroupRecords([]);
+      } finally {
+        setStandardizationLoading(false);
+      }
+    };
+
+    loadStandardizationGroup();
+  }, [activityDetailsVisible, selectedActivity, selectedActivityKey, dataSource, currentUser]);
+
+  const handleOpenStandardizationPage = () => {
+    navigate("/create/standardization-links", {
+      state: {
+        activityCode: selectedActivity?.Code || null,
+        moduleCode: findActivitySelectionByKey(dataSource, selectedActivityKey || "")?.module?.Code || null,
+      },
+    });
   };
 
   return (
@@ -2786,6 +2951,15 @@ export const StatusUpdate = () => {
               className="project-timeline-btn project-timeline-btn-note"
             >
               Note
+            </Button>
+
+            <Button
+              icon={<EditOutlined />}
+              disabled={!selectedActivityKey}
+              onClick={handleOpenStandardizeModal}
+              className="project-timeline-btn project-timeline-btn-standardize"
+            >
+              Standerize
             </Button>
 
             {!replaneMode && (
@@ -3345,6 +3519,45 @@ export const StatusUpdate = () => {
       </Modal>
 
       <Modal
+        title="Standerize Activity"
+        open={openStandardizeModal}
+        onCancel={handleCloseStandardizeModal}
+        onOk={handleSaveStandardize}
+        width={720}
+        okText="Save"
+        okButtonProps={{
+          disabled: !standerizeNameValue,
+        }}
+        destroyOnClose
+        className="modal-container"
+        maskClosable={false}
+        keyboard={false}
+      >
+        <Form
+          form={standardizeForm}
+          layout="vertical"
+          preserve={false}
+          onValuesChange={() => {
+            standardizeForm.validateFields().catch(() => null);
+          }}
+          style={{ padding: "0px 10px", display: "flex", flexDirection: "column", gap: "10px" }}
+        >
+          <Form.Item
+            label="Standerize Name"
+            name="standerizeName"
+            rules={[{ required: true, message: "Please enter standerize name" }]}
+          >
+            <Select
+              placeholder="Select standerize name"
+              options={standardizationMasterOptions}
+              showSearch
+              optionFilterProp="label"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
         title="Confirm Discard Changes"
         visible={discardReplaneMode}
         onOk={() => {
@@ -3570,6 +3783,8 @@ export const StatusUpdate = () => {
           setEditNoteId(null);
           setActivityBudget(null);
           setActivityCost(null);
+          setStandardizationGroupRecords([]);
+          setDetailsActiveTab('notes');
         }}
         width={'60%'}
         footer={null}
@@ -3683,6 +3898,52 @@ export const StatusUpdate = () => {
               </div>
             ) : (
               <div>No RACI information available</div>
+            )}
+          </TabPane>
+
+          <TabPane tab="Standardization" key="standardization">
+            {standardizationLoading ? (
+              <Spin />
+            ) : standardizationGroupRecords.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>
+                  <strong>Linked Group:</strong> {standardizationGroupRecords[0]?.standardizedName || "N/A"}
+                </div>
+                <List
+                  size="small"
+                  bordered
+                  dataSource={standardizationGroupRecords}
+                  renderItem={(item: any) => (
+                    <List.Item>
+                      <Space direction="vertical" size={0}>
+                        <span>
+                          <strong>{item?.moduleCode || "-"}</strong> - {item?.moduleName || "Module"}
+                        </span>
+                        <span>
+                          {item?.activityCode || "-"} - {item?.activityName || "Activity"}
+                        </span>
+                        <span style={{ color: "#6b7280", fontSize: 12 }}>
+                          {item?.version ? `Version ${item.version}` : (item?.timelineId || "Timeline Link")}
+                        </span>
+                      </Space>
+                    </List.Item>
+                  )}
+                />
+                <div>
+                  <Button icon={<EyeOutlined />} onClick={handleOpenStandardizationPage}>
+                    Open Detailed Link View
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div>No standardization link available for this activity yet.</div>
+                <div>
+                  <Button icon={<EyeOutlined />} onClick={handleOpenStandardizationPage}>
+                    Open Detailed Link View
+                  </Button>
+                </div>
+              </div>
             )}
           </TabPane>
 

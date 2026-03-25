@@ -18,6 +18,7 @@ type ActivityRow = {
     projectName: string;
     moduleName: string;
     activityName: string;
+    standardizedName: string;
     plannedStart?: string;
     plannedEnd?: string;
     actualStart?: string;
@@ -68,13 +69,62 @@ const fmt = (d: Date | null) => {
     return `${dd}-${mm}-${yyyy}`;
 };
 
+const MAX_LABEL_CHARS = 14;
+const truncateLabel = (value: string, max = MAX_LABEL_CHARS) => {
+    const safe = String(value ?? "");
+    if (safe.length <= max) return safe;
+    if (max <= 3) return safe.slice(0, max);
+    return `${safe.slice(0, max - 3)}...`;
+};
+
 const uniq = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
+
+const resolveProjectModules = async (project: any, timelineId?: string) => {
+    if (timelineId) {
+        const directTimelineData = await db.getProjectTimelineById(timelineId);
+        if (Array.isArray(directTimelineData)) {
+            return directTimelineData;
+        }
+
+        const numericTimelineId = Number(timelineId);
+        if (!Number.isNaN(numericTimelineId)) {
+            const numericTimelineData = await db.getProjectTimelineById(numericTimelineId);
+            if (Array.isArray(numericTimelineData)) {
+                return numericTimelineData;
+            }
+        }
+    }
+
+    const versions = Array.isArray(project?.projectTimeline) ? project.projectTimeline : [];
+    const latestVersion = localStorage.getItem("latestProjectVersion");
+    const selected =
+        (latestVersion ? versions.find((v: any) => String(v?.version) === String(latestVersion)) : null) ||
+        versions[versions.length - 1] ||
+        versions[0];
+
+    if (selected?.timelineId) {
+        const fallbackTimeline = await db.getProjectTimelineById(selected.timelineId);
+        if (Array.isArray(fallbackTimeline)) {
+            return fallbackTimeline;
+        }
+    }
+
+    if (Array.isArray(project?.processedTimelineData)) {
+        return project.processedTimelineData;
+    }
+
+    if (Array.isArray(project?.initialStatus?.items)) {
+        return project.initialStatus.items;
+    }
+
+    return [];
+};
 
 const PortfolioStats = () => {
     const [rows, setRows] = useState<ActivityRow[]>([]);
+    const [standardizationNames, setStandardizationNames] = useState<string[]>([]);
     const [state, setState] = useState<"loading" | "ready" | "empty" | "error">("loading");
-    const [moduleFilter, setModuleFilter] = useState<string>("");
-    const [activityFilter, setActivityFilter] = useState<string>("");
+    const [standardizedFilter, setStandardizedFilter] = useState<string>("");
 
     useEffect(() => {
         const load = async () => {
@@ -83,58 +133,91 @@ const PortfolioStats = () => {
                 const currentUser = getCurrentUser();
                 const stored = await db.getProjects();
                 const projects = (stored || []).filter((p: any) => p?.orgId === currentUser?.orgId);
+                const [masters, standardizedActivities] = currentUser?.orgId
+                    ? await Promise.all([
+                        db.getStandardizationMastersByOrg(String(currentUser.orgId)),
+                        db.getStandardizedActivitiesByOrg(String(currentUser.orgId)),
+                    ])
+                    : [[], []];
 
-                if (!projects.length) {
+                const masterNames = uniq(
+                    masters
+                        .map((item: any) => String(item?.name || "").trim())
+                        .filter(Boolean)
+                );
+
+                setStandardizationNames(masterNames);
+
+                if (!masterNames.length) {
                     setRows([]);
                     setState("empty");
                     return;
                 }
 
-                const latestVersion = localStorage.getItem("latestProjectVersion");
-                const collected: ActivityRow[] = [];
-
-                for (const project of projects) {
+                const timelineProjectMap = new Map<string, any>();
+                const projectIdMap = new Map<string, any>();
+                projects.forEach((project: any) => {
+                    projectIdMap.set(String(project?.id ?? ""), project);
                     const versions = Array.isArray(project?.projectTimeline) ? project.projectTimeline : [];
-                    const selected =
-                        (latestVersion ? versions.find((v: any) => String(v?.version) === String(latestVersion)) : null) ||
-                        versions[versions.length - 1] ||
-                        versions[0];
+                    versions.forEach((version: any) => {
+                        const timelineId = String(version?.timelineId || "");
+                        if (timelineId) {
+                            timelineProjectMap.set(timelineId, project);
+                        }
+                    });
+                });
 
-                    if (!selected?.timelineId) continue;
+                const collected: ActivityRow[] = [];
+                const seen = new Set<string>();
 
-                    const timelineData = await db.getProjectTimelineById(selected.timelineId);
-                    const modules = Array.isArray(timelineData) ? timelineData : [];
+                for (const standardized of standardizedActivities) {
+                    const timelineId = String(standardized?.timelineId || "");
+                    const moduleCode = String(standardized?.moduleCode ?? "");
+                    const activityCode = String(standardized?.activityCode ?? "");
+                    const standardizedName = String(standardized?.standardizedName ?? "");
+
+                    if (!timelineId || !moduleCode || !activityCode || !standardizedName) continue;
+
+                    const dedupeKey = `${timelineId}__${moduleCode}__${activityCode}__${standardizedName}`;
+                    if (seen.has(dedupeKey)) continue;
+                    seen.add(dedupeKey);
+
+                    const project =
+                        timelineProjectMap.get(timelineId) ||
+                        projectIdMap.get(String(standardized?.projectId ?? ""));
+                    if (!project) continue;
+
+                    const modules = await resolveProjectModules(project, timelineId);
                     const projectName = project?.projectParameters?.projectName || project?.name || `Project ${project?.id}`;
 
-                    for (const module of modules) {
-                        const moduleName = module?.moduleName ?? module?.parentModuleCode ?? "Module";
-                        const activities = module?.activities ?? [];
-                        for (const activity of activities) {
-                            collected.push({
-                                projectId: String(project?.id ?? ""),
-                                projectName,
-                                moduleName: String(moduleName),
-                                activityName: String(activity?.activityName ?? activity?.code ?? "Activity"),
-                                plannedStart: activity?.start,
-                                plannedEnd: activity?.end,
-                                actualStart: activity?.actualStart,
-                                actualEnd: activity?.actualFinish ?? activity?.actualEnd,
-                                status:
-                                    activity?.activityStatus ??
-                                    activity?.fin_status ??
-                                    activity?.workStatus ??
-                                    activity?.status ??
-                                    activity?.state,
-                                meta: activity,
-                            });
-                        }
-                    }
-                }
+                    const matchedModule = modules.find(
+                        (module: any) => String(module?.parentModuleCode ?? "") === moduleCode
+                    );
+                    if (!matchedModule) continue;
 
-                if (!collected.length) {
-                    setRows([]);
-                    setState("empty");
-                    return;
+                    const matchedActivity = (matchedModule?.activities ?? []).find(
+                        (activity: any) => String(activity?.code ?? "") === activityCode
+                    );
+                    if (!matchedActivity) continue;
+
+                    collected.push({
+                        projectId: String(project?.id ?? ""),
+                        projectName,
+                        moduleName: String(matchedModule?.moduleName ?? matchedModule?.parentModuleCode ?? "Module"),
+                        activityName: String(matchedActivity?.activityName ?? matchedActivity?.code ?? "Activity"),
+                        standardizedName,
+                        plannedStart: matchedActivity?.start,
+                        plannedEnd: matchedActivity?.end,
+                        actualStart: matchedActivity?.actualStart,
+                        actualEnd: matchedActivity?.actualFinish ?? matchedActivity?.actualEnd,
+                        status:
+                            matchedActivity?.activityStatus ??
+                            matchedActivity?.fin_status ??
+                            matchedActivity?.workStatus ??
+                            matchedActivity?.status ??
+                            matchedActivity?.state,
+                        meta: matchedActivity,
+                    });
                 }
 
                 setRows(collected);
@@ -142,6 +225,7 @@ const PortfolioStats = () => {
             } catch (err) {
                 console.error("Failed to load portfolio statistics:", err);
                 setRows([]);
+                setStandardizationNames([]);
                 setState("error");
             }
         };
@@ -149,44 +233,27 @@ const PortfolioStats = () => {
         load();
     }, []);
 
-    const modules = useMemo(() => {
-        return uniq(rows.map((r) => r.moduleName));
-    }, [rows]);
+    const standardizedOptions = useMemo(() => {
+        return standardizationNames;
+    }, [standardizationNames]);
 
     useEffect(() => {
-        if (!moduleFilter && modules.length) {
-            setModuleFilter(modules[0]);
-        } else if (moduleFilter && modules.length && !modules.includes(moduleFilter)) {
-            setModuleFilter(modules[0]);
+        if (!standardizedOptions.length) {
+            setStandardizedFilter("");
+        } else if (!standardizedFilter && standardizedOptions.length) {
+            setStandardizedFilter(standardizedOptions[0]);
+        } else if (standardizedFilter && standardizedOptions.length && !standardizedOptions.includes(standardizedFilter)) {
+            setStandardizedFilter(standardizedOptions[0]);
         }
-    }, [modules, moduleFilter]);
-
-    const activityOptions = useMemo(() => {
-        if (!moduleFilter) return [];
-        const names = rows
-            .filter((r) => r.moduleName === moduleFilter)
-            .map((r) => r.activityName);
-        return uniq(names);
-    }, [rows, moduleFilter]);
-
-    useEffect(() => {
-        if (!activityOptions.length) {
-            if (activityFilter) setActivityFilter("");
-            return;
-        }
-        if (!activityFilter || !activityOptions.includes(activityFilter)) {
-            setActivityFilter(activityOptions[0]);
-        }
-    }, [activityFilter, activityOptions]);
+    }, [standardizedFilter, standardizedOptions]);
 
     const filtered = useMemo(() => {
         return rows.filter((r) => {
-            if (!moduleFilter) return false;
-            if (r.moduleName !== moduleFilter) return false;
-            if (activityFilter && r.activityName !== activityFilter) return false;
+            if (!standardizedFilter) return false;
+            if (r.standardizedName !== standardizedFilter) return false;
             return true;
         });
-    }, [rows, moduleFilter, activityFilter]);
+    }, [rows, standardizedFilter]);
 
     const chartData = useMemo(() => {
         const grouped = new Map<
@@ -195,7 +262,9 @@ const PortfolioStats = () => {
                 key: string;
                 label: string;
                 projectName: string;
+                moduleName: string;
                 activityName: string;
+                standardizedName: string;
                 plannedStartTs: number | null;
                 plannedEndTs: number | null;
                 actualStartTs: number | null;
@@ -217,7 +286,9 @@ const PortfolioStats = () => {
                     key,
                     label: r.projectName,
                     projectName: r.projectName,
+                    moduleName: r.moduleName,
                     activityName: r.activityName,
+                    standardizedName: r.standardizedName,
                     plannedStartTs: ps ? ps.getTime() : null,
                     plannedEndTs: pe ? pe.getTime() : null,
                     actualStartTs: as ? as.getTime() : null,
@@ -264,7 +335,9 @@ const PortfolioStats = () => {
                 key: g.key,
                 label: g.projectName,
                 projectName: g.projectName,
+                moduleName: g.moduleName,
                 activityName: g.activityName,
+                standardizedName: g.standardizedName,
                 plannedValue: plannedPoint,
                 actualValue: actualPoint,
                 plannedStart,
@@ -358,7 +431,7 @@ const PortfolioStats = () => {
         return (
             <div className="pst-empty">
                 <div className="pst-empty-title">No Project Statistics</div>
-                <div className="pst-empty-subtitle">Add timeline data to see planned vs actual activity dates.</div>
+                <div className="pst-empty-subtitle">Create standerized activity mappings to compare the same work across projects.</div>
             </div>
         );
     }
@@ -368,7 +441,7 @@ const PortfolioStats = () => {
             {!filtered.length ? (
                 <div className="pst-empty">
                     <div className="pst-empty-title">No Activities Found</div>
-                    <div className="pst-empty-subtitle">Change module or activity to see available timelines.</div>
+                    <div className="pst-empty-subtitle">Select another standardized activity to see linked project timelines.</div>
                 </div>
             ) : (
                 <div className="pst-grid">
@@ -376,27 +449,13 @@ const PortfolioStats = () => {
                         <div className="pst-card-header">
                             <div>
                                 <div className="pst-card-title">Planned vs Actual Timeline</div>
-                                <div className="pst-card-subtitle">Y-axis = date, X-axis = activity + project.</div>
+                                <div className="pst-card-subtitle">Compare the same standardized activity across projects.</div>
                             </div>
                             <div className="pst-filters">
                                 <label className="pst-filter">
-                                    <span>Module</span>
-                                    <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
-                                        {modules.map((mod) => (
-                                            <option key={mod} value={mod}>
-                                                {mod}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                                <label className="pst-filter">
-                                    <span>Activity</span>
-                                    <select
-                                        value={activityFilter}
-                                        onChange={(e) => setActivityFilter(e.target.value)}
-                                        disabled={!activityOptions.length}
-                                    >
-                                        {activityOptions.map((name) => (
+                                    <span>Standardized Activity</span>
+                                    <select value={standardizedFilter} onChange={(e) => setStandardizedFilter(e.target.value)}>
+                                        {standardizedOptions.map((name) => (
                                             <option key={name} value={name}>
                                                 {name}
                                             </option>
@@ -417,15 +476,18 @@ const PortfolioStats = () => {
                                     <XAxis
                                         dataKey="label"
                                         interval={0}
-                                        height={54}
+                                        height={52}
                                         tick={(props: any) => {
                                             const { x, y, payload } = props;
                                             const raw = String(payload?.value || "");
                                             const projectName = raw;
+                                            const displayName = truncateLabel(projectName);
+                                            const yOffset = 22;
                                             return (
-                                                <g transform={`translate(${x},${y})`}>
-                                                    <text textAnchor="end" transform="rotate(-12)">
-                                                        <tspan x="0" dy="0">{projectName}</tspan>
+                                                <g transform={`translate(${x},${y + yOffset})`}>
+                                                    <text textAnchor="middle" style={{ pointerEvents: "all" }} aria-label={projectName}>
+                                                        <title>{projectName}</title>
+                                                        <tspan x="0" dy="18">{displayName}</tspan>
                                                     </text>
                                                 </g>
                                             );
@@ -449,7 +511,9 @@ const PortfolioStats = () => {
                                             return (
                                                 <div className="pst-tooltip">
                                                     <div className="pst-tooltip-title">Project: {row.projectName}</div>
+                                                    <div className="pst-tooltip-line">Standardized Activity: {row.standardizedName}</div>
                                                     <div className="pst-tooltip-line">Activity: {row.activityName}</div>
+                                                    <div className="pst-tooltip-line">Module: {row.moduleName}</div>
                                                     <div className="pst-tooltip-section">Planned</div>
                                                     <div className="pst-tooltip-line">Start: {row.plannedStart}</div>
                                                     <div className="pst-tooltip-line">End: {row.plannedEnd}</div>

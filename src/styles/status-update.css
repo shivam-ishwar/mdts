@@ -183,13 +183,15 @@
 }
 
 .project-timeline-btn.ant-btn {
-    height: 36px;
+    height: 28px;
+    padding: 8px;
     border-radius: var(--radius-md);
     border: 1px solid var(--su-border);
     background: var(--su-surface);
     color: var(--su-text);
     box-shadow: var(--su-shadow);
-    font-weight: 800;
+    font-weight: 600;
+    font-size: 13px;
     transition: background-color .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
 
@@ -233,6 +235,12 @@
 
 .project-timeline-btn-note.ant-btn:not([disabled]) {
     background: var(--error);
+    border-color: transparent;
+    color: var(--text-inverse);
+}
+
+.project-timeline-btn-standardize.ant-btn:not([disabled]) {
+    background: #0f9d8a;
     border-color: transparent;
     color: var(--text-inverse);
 }
