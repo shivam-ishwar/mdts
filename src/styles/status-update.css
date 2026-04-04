@@ -342,6 +342,21 @@
     background: rgba(209, 250, 229, .45) !important;
 }
 
+.status-standardized-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-left: 6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(15, 157, 138, .12);
+    color: #0f766e;
+    font-size: 12px;
+    line-height: 1;
+}
+
 .row-high-delay {
     background-color: rgba(185, 28, 28, .08) !important;
 }

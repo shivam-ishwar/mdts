@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Button, Select, Modal, Input, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin } from "antd";
-import { ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUser } from '../Utils/moduleStorage';
@@ -16,7 +16,7 @@ import { ToastContainer } from 'react-toastify';
 import { notify } from "../Utils/ToastNotify.tsx";
 import { UserOutlined } from '@ant-design/icons';
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import type { ActivityBudget, ActivityCost } from "../Utils/dataStorege";
+import type { ActivityBudget, ActivityCost, StandardizedActivity } from "../Utils/dataStorege";
 
 dayjs.extend(customParseFormat);
 interface Activity {
@@ -42,6 +42,9 @@ interface Module {
 
 const { Option } = Select;
 const { TabPane } = Tabs;
+
+const makeStandardizationLookupKey = (moduleCode?: string | null, activityCode?: string | null) =>
+  `${String(moduleCode || "")}__${String(activityCode || "")}`;
 
 
 export const StatusUpdate = () => {
@@ -111,10 +114,23 @@ export const StatusUpdate = () => {
   const [standardizationGroupRecords, setStandardizationGroupRecords] = useState<any[]>([]);
   const [standardizationLoading, setStandardizationLoading] = useState(false);
   const [standardizationMasterOptions, setStandardizationMasterOptions] = useState<any[]>([]);
+  const [standardizedActivities, setStandardizedActivities] = useState<StandardizedActivity[]>([]);
+  const [selectedStandardizedRecord, setSelectedStandardizedRecord] = useState<StandardizedActivity | null>(null);
+  const [standardizationSaving, setStandardizationSaving] = useState(false);
+  const [standardizationDeleting, setStandardizationDeleting] = useState(false);
   const userMap = useMemo(
     () => Object.fromEntries(userOptions.map((u: any) => [u.id, u.name])),
     [userOptions]
   );
+  const standardizedActivityLookup = useMemo(() => {
+    return standardizedActivities.reduce((map, item) => {
+      map.set(
+        makeStandardizationLookupKey(item.moduleCode, item.activityCode),
+        item
+      );
+      return map;
+    }, new Map<string, StandardizedActivity>());
+  }, [standardizedActivities]);
 
 
   useEffect(() => {
@@ -128,17 +144,21 @@ export const StatusUpdate = () => {
   useEffect(() => {
     if (currentUser && currentUser.orgId) {
       defaultSetup();
-      loadStandardizationMasters(currentUser.orgId);
+      refreshStandardizationData(currentUser.orgId);
     }
   }, [currentUser]);
 
-  const loadStandardizationMasters = async (orgId?: string) => {
+  const refreshStandardizationData = async (orgId?: string) => {
     if (!orgId) {
       setStandardizationMasterOptions([]);
+      setStandardizedActivities([]);
       return;
     }
 
-    const masters = await db.getStandardizationMastersByOrg(String(orgId));
+    const [masters, linkedActivities] = await Promise.all([
+      db.getStandardizationMastersByOrg(String(orgId)),
+      db.getStandardizedActivitiesByOrg(String(orgId)),
+    ]);
     const options = masters
       .slice()
       .sort((a: any, b: any) => String(a?.name || "").localeCompare(String(b?.name || "")))
@@ -148,6 +168,7 @@ export const StatusUpdate = () => {
       }));
 
     setStandardizationMasterOptions(options);
+    setStandardizedActivities(linkedActivities);
   };
 
   useEffect(() => {
@@ -199,6 +220,7 @@ export const StatusUpdate = () => {
       const hydrateForm = async () => {
         const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
         if (!selection?.activity || !currentUser?.orgId) {
+          setSelectedStandardizedRecord(null);
           standardizeForm.resetFields();
           return;
         }
@@ -209,6 +231,7 @@ export const StatusUpdate = () => {
           String(selection.activity.Code)
         );
 
+        setSelectedStandardizedRecord(existing);
         standardizeForm.setFieldsValue({
           standerizeName: existing?.standardizedName || undefined,
         });
@@ -807,6 +830,7 @@ export const StatusUpdate = () => {
           plannedStart,
           plannedFinish,
           isModule,
+          Code,
         } = record;
 
         // ⬇️ If it's a module row, just show text (no icons)
@@ -837,6 +861,10 @@ export const StatusUpdate = () => {
         const actualFinishDate = actualFinish
           ? dayjs(actualFinish, "DD-MM-YYYY")
           : null;
+        const selection = findActivitySelectionByKey(dataSource, record.key);
+        const standardizedRecord = standardizedActivityLookup.get(
+          makeStandardizationLookupKey(selection?.module?.Code, Code)
+        );
 
         let iconSrc = "";
         const isStartSame =
@@ -912,6 +940,14 @@ export const StatusUpdate = () => {
             )}
 
             {keyActivity}
+
+            {standardizedRecord ? (
+              <Tooltip title={`Standardized as ${standardizedRecord.standardizedName}`}>
+                <span className="status-standardized-indicator">
+                  <CheckCircleFilled />
+                </span>
+              </Tooltip>
+            ) : null}
           </span>
         );
       },
@@ -1908,12 +1944,14 @@ export const StatusUpdate = () => {
   };
 
   const handleOpenStandardizeModal = () => {
+    setSelectedStandardizedRecord(null);
     setOpenStandardizeModal(true);
   };
 
   const handleCloseStandardizeModal = () => {
     setOpenStandardizeModal(false);
     standardizeForm.resetFields();
+    setSelectedStandardizedRecord(null);
   };
 
   const handleRaciChange = async () => {
@@ -1952,6 +1990,7 @@ export const StatusUpdate = () => {
 
   const handleSaveStandardize = async () => {
     try {
+      setStandardizationSaving(true);
       const values = await standardizeForm.validateFields();
       const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
 
@@ -1985,11 +2024,53 @@ export const StatusUpdate = () => {
       });
 
       notify.success("Activity standardized successfully.");
-      loadStandardizationMasters(String(currentUser.orgId));
+      await refreshStandardizationData(String(currentUser.orgId));
       handleCloseStandardizeModal();
     } catch (error) {
       console.error("Standardize validation failed:", error);
+    } finally {
+      setStandardizationSaving(false);
     }
+  };
+
+  const handleDeleteStandardize = () => {
+    const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+    if (!currentUser?.orgId || !selection?.activity || !selection?.module || !selectedStandardizedRecord) {
+      return;
+    }
+
+    Modal.confirm({
+      title: "De-link this standardized activity?",
+      content: `${selection.activity?.keyActivity || "This activity"} will be removed from "${selectedStandardizedRecord.standardizedName}".`,
+      okText: "De-link",
+      cancelText: "Cancel",
+      okButtonProps: { danger: true, loading: standardizationDeleting },
+      centered: true,
+      className: "modal-container",
+      onOk: async () => {
+        try {
+          setStandardizationDeleting(true);
+          await db.deleteStandardizedActivity(
+            String(currentUser.orgId),
+            String(selection.module?.Code || ""),
+            String(selection.activity?.Code || "")
+          );
+          notify.success("Standardization link removed.");
+          await refreshStandardizationData(String(currentUser.orgId));
+          standardizeForm.resetFields();
+          setSelectedStandardizedRecord(null);
+          handleCloseStandardizeModal();
+          if (activityDetailsVisible && selectedActivity?.Code === selection.activity?.Code) {
+            setStandardizationGroupRecords([]);
+          }
+        } catch (error) {
+          console.error("Failed to de-link standardized activity", error);
+          notify.error("Unable to de-link activity.");
+        } finally {
+          setStandardizationDeleting(false);
+        }
+      },
+    });
   };
 
   const handleConfirm = async () => {
@@ -2769,7 +2850,7 @@ export const StatusUpdate = () => {
     };
 
     loadStandardizationGroup();
-  }, [activityDetailsVisible, selectedActivity, selectedActivityKey, dataSource, currentUser]);
+  }, [activityDetailsVisible, selectedActivity, selectedActivityKey, dataSource, currentUser, standardizedActivities]);
 
   const handleOpenStandardizationPage = () => {
     navigate("/create/standardization-links", {
@@ -3522,12 +3603,33 @@ export const StatusUpdate = () => {
         title="Standerize Activity"
         open={openStandardizeModal}
         onCancel={handleCloseStandardizeModal}
-        onOk={handleSaveStandardize}
         width={720}
-        okText="Save"
-        okButtonProps={{
-          disabled: !standerizeNameValue,
-        }}
+        footer={[
+          <Button key="cancel" onClick={handleCloseStandardizeModal}>
+            Cancel
+          </Button>,
+          ...(selectedStandardizedRecord
+            ? [
+                <Button
+                  key="delink"
+                  danger
+                  loading={standardizationDeleting}
+                  onClick={handleDeleteStandardize}
+                >
+                  De-link
+                </Button>,
+              ]
+            : []),
+          <Button
+            key="save"
+            type="primary"
+            loading={standardizationSaving}
+            disabled={!standerizeNameValue}
+            onClick={handleSaveStandardize}
+          >
+            {selectedStandardizedRecord ? "Update" : "Save"}
+          </Button>,
+        ]}
         destroyOnClose
         className="modal-container"
         maskClosable={false}
