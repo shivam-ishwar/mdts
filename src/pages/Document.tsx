@@ -7,6 +7,7 @@ import { useDropzone, Accept } from "react-dropzone";
 import { Typography } from "antd";
 
 import { db } from "../Utils/dataStorege.ts";
+import { getLatestProjectModules } from "../Utils/projectTimeline";
 import { v4 as uuidv4 } from "uuid";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
@@ -112,24 +113,7 @@ const Document: React.FC = () => {
             setModulesData([]);
             return;
         }
-        if (Array.isArray(proj.processedTimelineData) && proj.processedTimelineData.length) {
-            setModulesData(proj.processedTimelineData);
-            return;
-        }
-        if (Array.isArray(proj.projectTimeline) && proj.projectTimeline.length) {
-            try {
-                const latest = proj.projectTimeline[proj.projectTimeline.length - 1];
-                const tId = latest.timelineId || latest.versionId;
-                if (tId) {
-                    const timeline = await db.getProjectTimelineById(tId);
-                    setModulesData(Array.isArray(timeline) ? timeline : []);
-                    return;
-                }
-            } catch (e) {
-                console.error("Failed to load timeline modules", e);
-            }
-        }
-        setModulesData([]);
+        setModulesData(await getLatestProjectModules(proj));
     };
 
     const handlePreview = async (record: any) => {

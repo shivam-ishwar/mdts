@@ -1873,7 +1873,6 @@ export const StatusUpdate = () => {
     await db.updateProjectTimeline(selectedProjectTimeline.versionId || selectedProjectTimeline.timelineId, updatedSequencedModules);
     setNoteInput('');
     setEditNoteId(null);
-    setNoteModalVisible(false);
     notify.success(`Note ${editNoteId ? 'updated' : 'added'} successfully!`);
   };
 
@@ -2076,6 +2075,8 @@ export const StatusUpdate = () => {
   const handleConfirm = async () => {
     try {
       const values = await form.validateFields();
+      const selectedActivityRecord = findActivityByKey(dataSource, selectedActivityKey);
+      const selectedActivitySelection = findActivitySelectionByKey(dataSource, selectedActivityKey);
 
       const updatedDataSource = (prev: any[]): any[] =>
         prev.map(item => {
@@ -2122,8 +2123,49 @@ export const StatusUpdate = () => {
         updatedSequencedModules
       );
 
-      form.resetFields();
-      setOpenCostCalcModal(false);
+      if (selectedProjectId && selectedActivityRecord?.Code) {
+        await db.upsertActivityCost({
+          projectId: String(selectedProjectId),
+          moduleCode: String(selectedActivitySelection?.module?.Code || ""),
+          moduleName: String(
+            selectedActivitySelection?.module?.keyActivity ||
+            selectedActivitySelection?.module?.moduleName ||
+            ""
+          ),
+          activityCode: String(selectedActivityRecord.Code),
+          activityName: String(
+            selectedActivityRecord.keyActivity ||
+            selectedActivityRecord.activityName ||
+            ""
+          ),
+          projectCost: Number(values.projectCost),
+          opportunityCost: Number(values.opCost),
+        });
+
+        setActivityCost({
+          projectId: String(selectedProjectId),
+          moduleCode: String(selectedActivitySelection?.module?.Code || ""),
+          moduleName: String(
+            selectedActivitySelection?.module?.keyActivity ||
+            selectedActivitySelection?.module?.moduleName ||
+            ""
+          ),
+          activityCode: String(selectedActivityRecord.Code),
+          activityName: String(
+            selectedActivityRecord.keyActivity ||
+            selectedActivityRecord.activityName ||
+            ""
+          ),
+          projectCost: Number(values.projectCost),
+          opportunityCost: Number(values.opCost),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      form.setFieldsValue({
+        projectCost: values.projectCost,
+        opCost: values.opCost,
+      });
       notify.success("Cost updated successfully!");
     } catch (error) {
       console.error("Validation Failed:", error);
@@ -2181,8 +2223,12 @@ export const StatusUpdate = () => {
         updatedSequencedModules
       );
 
-      raciForm.resetFields();
-      setOpenResponsibilityModal(false);
+      raciForm.setFieldsValue({
+        responsible: values.responsible,
+        accountable: values.accountable,
+        consulted: values.consulted || [],
+        informed: values.informed || [],
+      });
       notify.success("Responsibilities updated successfully!");
     } catch (error) {
       console.error("Validation Failed:", error);
@@ -2496,8 +2542,11 @@ export const StatusUpdate = () => {
     const currentActCode = String(activity.Code ?? activity.code ?? "");
     setSelectedActivityDocs(updatedMap.get(currentActCode) || []);
 
-    resetDocModalState();
-    setDocModalVisible(false);
+    setDocName("");
+    setDocType("");
+    setDocFile(null);
+    setDescription("");
+    docForm.resetFields();
   };
 
   const columns: any = [
@@ -2798,8 +2847,26 @@ export const StatusUpdate = () => {
         db.getActivityCost(String(selectedProjectId), String(record.Code)),
       ]);
 
+      const fallbackCost =
+        !cost &&
+        (record?.cost?.projectCost != null || record?.cost?.opCost != null)
+          ? {
+            projectId: String(selectedProjectId),
+            activityCode: String(record.Code),
+            activityName: String(record.keyActivity || ""),
+            projectCost:
+              record?.cost?.projectCost != null
+                ? Number(record.cost.projectCost)
+                : undefined,
+            opportunityCost:
+              record?.cost?.opCost != null
+                ? Number(record.cost.opCost)
+                : undefined,
+          }
+          : null;
+
       setActivityBudget(budget);
-      setActivityCost(cost);
+      setActivityCost(cost || fallbackCost);
     } catch (err) {
       console.error("Failed to load activity details", err);
       setActivityBudget(null);

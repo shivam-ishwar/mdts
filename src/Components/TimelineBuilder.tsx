@@ -624,13 +624,26 @@ const TimeBuilder = () => {
   const handleSlackChange = (code: any, newSlack: any) => {
     let updatedFinalData = [...finalData];
     let updatedSequencedModules = [...sequencedModules];
+    const targetActivity = sequencedModules
+      .flatMap((module: any) => module.activities || [])
+      .find((activity: any) => activity.code == code);
+    const activityDuration = parseInt(targetActivity?.duration, 10) || 0;
+    const isEmptySlack = newSlack === "";
+    const requestedSlack = parseInt(newSlack, 10) || 0;
+    const normalizedSlack = isEmptySlack
+      ? ""
+      : String(Math.min(requestedSlack, activityDuration));
+
+    if (!isEmptySlack && requestedSlack > activityDuration) {
+      notify.warning("Slack cannot be greater than the activity duration.");
+    }
 
     function updateActivities(activities: any) {
       return activities.map((activity: any) => {
         if (activity.activityStatus == "completed" || activity.fin_status == "completed") return activity;
 
         if (activity.code == code) {
-          activity.slack = newSlack;
+          activity.slack = normalizedSlack;
 
           const preEnd = activity.prerequisite
             ? getActivityEndDate(activity.prerequisite)
@@ -639,7 +652,7 @@ const TimeBuilder = () => {
           const preEndISO = preEnd ? toISODateOnly(preEnd) : null;
           if (!preEndISO) return activity; // cannot compute yet
 
-          const slackDays = parseInt(newSlack, 10) || 0;
+          const slackDays = parseInt(normalizedSlack, 10) || 0;
           const { date: startISO, holidays: slackH } = addBusinessDays(preEndISO, slackDays + 1);
 
           const duration = parseInt(activity.duration, 10) || 0;
@@ -1319,13 +1332,16 @@ const TimeBuilder = () => {
         key: "duration",
         align: "center",
         render: (_duration: any, record: any) => {
-          const isDisabled = record.activityStatus == "completed" || step !== 1;
+          const isDisabled =
+            record.activityStatus == "completed" ||
+            record.fin_status == "completed" ||
+            step !== 2;
 
           return (
             <Input
               placeholder="Duration"
               type="text"
-              value={record.duration || "0"}
+              value={record.duration ?? ""}
               onChange={(e) => {
                 const value = e.target.value.replace(/\D/g, "");
                 handleDurationChange(record.code, value);
@@ -1396,9 +1412,9 @@ const TimeBuilder = () => {
         onCell: () => ({ className: step == 2 ? "first-column-red" : "" }),
         render: (_: any, record: any) => {
           const disabled =
-            !isUpdateMode && !isReplanMode ||
             record.activityStatus === "completed" ||
-            record.activityStatus === "inprogress";
+            record.activityStatus === "inprogress" ||
+            record.fin_status === "completed";
 
           return (
             <div style={{ marginRight: "20px" }}>
@@ -1480,7 +1496,7 @@ const TimeBuilder = () => {
               <Input
                 placeholder="Slack"
                 type="text"
-                value={record.slack || "0"}
+                value={record.slack ?? "0"}
                 onChange={(e) => {
                   const value = e.target.value.replace(/\D/g, "");
                   handleSlackChange(record.code, value);
@@ -1705,11 +1721,13 @@ const TimeBuilder = () => {
         align: "center",
         render: (_text: any, record: any) => {
           const disabled =
-            !isUpdateMode && !isReplanMode ||
             record.activities?.some((activity: any) =>
               ["completed", "inprogress"].includes(
                 (activity.activityStatus || "").toLowerCase()
               )
+            ) ||
+            record.activities?.some(
+              (activity: any) => (activity.fin_status || "").toLowerCase() === "completed"
             );
 
           return (

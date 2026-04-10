@@ -26,6 +26,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { db, ActivityBudgetDocument } from "../Utils/dataStorege";
+import { getLatestProjectModules } from "../Utils/projectTimeline";
 import "../styles/activitybudget.css";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify";
@@ -99,6 +100,12 @@ const ActivityBudget: React.FC = () => {
   const [revisionValue, setRevisionValue] = useState<number | null>(null);
   const [selectedActivityRow, setSelectedActivityRow] = useState<TableRow | null>(null);
   const [revisionDate, setRevisionDate] = useState<Dayjs | null>(dayjs());
+
+  const selectActivityRow = (row: TableRow) => {
+    if (row.isModule) return;
+    setSelectedActivityRow(row);
+  };
+
   useEffect(() => {
     (async () => {
       const all = await db.getProjects();
@@ -143,18 +150,7 @@ const ActivityBudget: React.FC = () => {
       setTimelineInfo(null);
     }
 
-    let modules: any[] = [];
-
-    if (proj?.processedTimelineData?.length) {
-      modules = proj.processedTimelineData;
-    } else if (proj?.projectTimeline?.length) {
-      const latest = proj.projectTimeline[proj.projectTimeline.length - 1];
-      const timelineId = latest.timelineId || latest.versionId;
-      if (timelineId) {
-        const t = await db.getProjectTimelineById(timelineId);
-        modules = Array.isArray(t) ? t : [];
-      }
-    }
+    const modules = proj ? await getLatestProjectModules(proj) : [];
 
     await buildPanelsFromModules(projectId, modules);
     setLoading(false);
@@ -251,49 +247,6 @@ const ActivityBudget: React.FC = () => {
     );
   };
 
-  const handleInitialBudgetBlur = async (row: TableRow, moduleName: string) => {
-    if (!selectedProjectId || row.isModule) return;
-
-    const value = row.currentBudget;
-    if (value === null || value === undefined || Number.isNaN(value)) return;
-
-    const existing = await db.getActivityBudget(
-      String(selectedProjectId),
-      row.activityCode
-    );
-    if (existing) return;
-
-    const now = new Date().toISOString();
-
-    await db.upsertActivityBudget({
-      projectId: String(selectedProjectId),
-      activityCode: row.activityCode,
-      activityName: row.activityName,
-      moduleName,
-      originalBudget: Number(value),
-      originalBudgetDate: now,
-      revisionHistory: [],
-    });
-
-    setModulesPanels((prev) =>
-      prev.map((p) => ({
-        ...p,
-        rows: p.rows.map((r) =>
-          r.key === row.key
-            ? {
-              ...r,
-              originalBudget: Number(value),
-              originalBudgetDate: now,
-              currentBudget: Number(value),
-              currentBudgetDate: now,
-              revisionHistory: [],
-            }
-            : r
-        ),
-      }))
-    );
-  };
-
   const numericParser = (value: string | undefined): number => {
     const cleaned = (value || "").replace(/[^\d]/g, "");
     return cleaned ? Number(cleaned) : NaN;
@@ -378,6 +331,21 @@ const ActivityBudget: React.FC = () => {
     if (value === null || value === undefined || Number.isNaN(value)) {
       notify.error("Budget value is invalid");
       cancelEdit();
+      return;
+    }
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: "Save this budget?",
+        content: "After confirmation, this budget will be saved and the field will become read-only until you edit it again.",
+        okText: "Confirm",
+        cancelText: "Cancel",
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+
+    if (!confirmed) {
       return;
     }
 
@@ -493,6 +461,77 @@ const ActivityBudget: React.FC = () => {
     );
 
     resetEditing();
+  };
+
+  const persistBudgetRow = async (
+    row: ActivityRow,
+    moduleName: string,
+    projectId: string
+  ) => {
+    const value = row.currentBudget;
+    const existing = await db.getActivityBudget(projectId, row.activityCode);
+
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      if (existing) {
+        await db.deleteActivityBudget(projectId, row.activityCode);
+      }
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const existingHistory: RevisionEntry[] = existing?.revisionHistory || [];
+
+    if (!existing) {
+      await db.upsertActivityBudget({
+        projectId,
+        activityCode: row.activityCode,
+        activityName: row.activityName,
+        moduleName,
+        originalBudget: Number(value),
+        originalBudgetDate: now,
+        revisionHistory: [],
+      });
+      return;
+    }
+
+    if (existingHistory.length > 0) {
+      const latestHistory = existingHistory[existingHistory.length - 1];
+      if (latestHistory?.amount === Number(value)) {
+        return;
+      }
+
+      const updatedHistory: RevisionEntry[] = [...existingHistory];
+      updatedHistory[updatedHistory.length - 1] = {
+        ...updatedHistory[updatedHistory.length - 1],
+        amount: Number(value),
+        date: now,
+      };
+
+      await db.upsertActivityBudget({
+        projectId,
+        activityCode: row.activityCode,
+        activityName: row.activityName,
+        moduleName,
+        originalBudget: existing.originalBudget,
+        originalBudgetDate: existing.originalBudgetDate,
+        revisionHistory: updatedHistory,
+      });
+      return;
+    }
+
+    if (existing.originalBudget === Number(value)) {
+      return;
+    }
+
+    await db.upsertActivityBudget({
+      projectId,
+      activityCode: row.activityCode,
+      activityName: row.activityName,
+      moduleName,
+      originalBudget: Number(value),
+      originalBudgetDate: existing.originalBudgetDate ?? now,
+      revisionHistory: [],
+    });
   };
 
   const openRevisionModal = (row: TableRow) => {
@@ -631,24 +670,25 @@ const ActivityBudget: React.FC = () => {
       render: (_: any, row: TableRow) => {
         if (row.isModule) return null;
 
-        const hasAnyBudget =
-          typeof row.currentBudget === "number" ||
-          typeof row.originalBudget === "number" ||
-          (row.revisionHistory && row.revisionHistory.length > 0);
-
-        const hasPersistedBudget =
+        const hasPersistedBudget = Boolean(
           (typeof row.originalBudget === "number" && row.originalBudgetDate) ||
-          (row.revisionHistory && row.revisionHistory.length > 0);
+          (row.revisionHistory && row.revisionHistory.length > 0)
+        );
 
         const hasRevisionHistory =
           row.revisionHistory && row.revisionHistory.length > 0;
 
         const isEditing = editingRowKey === row.key;
-        const disabled = hasAnyBudget && !isEditing;
+        const disabled = hasPersistedBudget && !isEditing;
         const isHistoryActive = historyModalRow?.key === row.key;
 
         return (
-          <div className="budget-cell rev-budg">
+          <div
+            className="budget-cell rev-budg"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
             <InputNumber<number>
               className={
                 isEditing
@@ -661,10 +701,11 @@ const ActivityBudget: React.FC = () => {
               parser={numericParser}
               value={row.currentBudget ?? undefined}
               onChange={(v) => handleBudgetChange(row.key, v ?? null)}
-              onBlur={() => {
-                if (!hasAnyBudget && !isEditing) {
-                  handleInitialBudgetBlur(row, row.moduleName || "");
-                }
+              onClick={(event) => {
+                event.stopPropagation();
+              }}
+              onFocus={(event) => {
+                event.stopPropagation();
               }}
               disabled={disabled}
             />
@@ -676,7 +717,11 @@ const ActivityBudget: React.FC = () => {
                     type="link"
                     size="small"
                     icon={<HistoryOutlined />}
-                    onClick={() => openHistoryModal(row)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      selectActivityRow(row);
+                      openHistoryModal(row);
+                    }}
                     className={
                       isHistoryActive
                         ? "revision-btn revision-btn--history revision-btn--active"
@@ -782,7 +827,11 @@ const ActivityBudget: React.FC = () => {
             type="link"
             size="small"
             icon={<FileTextOutlined />}
-            onClick={() => openDocsModal(row)}
+            onClick={(event) => {
+              event.stopPropagation();
+              selectActivityRow(row);
+              openDocsModal(row);
+            }}
           >
             Docs
           </Button>
@@ -796,9 +845,10 @@ const ActivityBudget: React.FC = () => {
       render: (_: any, row: TableRow) => {
         if (row.isModule) return null;
 
-        const hasPersistedBudget =
+        const hasPersistedBudget = Boolean(
           (typeof row.originalBudget === "number" && row.originalBudgetDate) ||
-          (row.revisionHistory && row.revisionHistory.length > 0);
+          (row.revisionHistory && row.revisionHistory.length > 0)
+        );
 
         if (!hasPersistedBudget) return null;
 
@@ -811,7 +861,11 @@ const ActivityBudget: React.FC = () => {
                 <Button
                   type="link"
                   icon={<CheckOutlined />}
-                  onClick={saveEdit}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectActivityRow(row);
+                    void saveEdit();
+                  }}
                   className="budget-action-btn budget-action-btn--save budget-action-btn--active"
                 />
               </Tooltip>
@@ -819,7 +873,11 @@ const ActivityBudget: React.FC = () => {
                 <Button
                   type="link"
                   icon={<CloseOutlined />}
-                  onClick={cancelEdit}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectActivityRow(row);
+                    cancelEdit();
+                  }}
                   className="budget-action-btn budget-action-btn--cancel budget-action-btn--active"
                 />
               </Tooltip>
@@ -833,7 +891,11 @@ const ActivityBudget: React.FC = () => {
               <Button
                 type="link"
                 icon={<EditOutlined />}
-                onClick={() => startEdit(row)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectActivityRow(row);
+                  startEdit(row);
+                }}
                 className="budget-action-btn budget-action-btn--edit"
               />
             </Tooltip>
@@ -845,10 +907,36 @@ const ActivityBudget: React.FC = () => {
 
   const handleSaveAll = async () => {
     if (!selectedProjectId) return;
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Modal.confirm({
+        title: "Save activity budgets?",
+        content: "After confirmation, entered budgets will be saved and saved rows will become read-only until edited again.",
+        okText: "Confirm",
+        cancelText: "Cancel",
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     setLoading(true);
     try {
+      const projectId = String(selectedProjectId);
+      const ops: Promise<void | number>[] = [];
+
+      modulesPanels.forEach((panel) => {
+        panel.rows.forEach((row) => {
+          ops.push(persistBudgetRow(row, panel.moduleName, projectId));
+        });
+      });
+
+      await Promise.all(ops);
       await loadModulesForProject(selectedProjectId);
-      notify.success("Budgets refreshed.");
+      notify.success("Activity budget saved.");
     } finally {
       setLoading(false);
     }
@@ -1130,7 +1218,7 @@ const ActivityBudget: React.FC = () => {
           onRow={(record) => ({
             onClick: () => {
               if (record.isModule) return;
-              setSelectedActivityRow((prev) => (prev?.key === record.key ? null : record));
+              selectActivityRow(record);
             },
           })}
           scroll={{ x: true, y: "calc(100vh - 260px)" }}

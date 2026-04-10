@@ -3,6 +3,7 @@ import { Table, Select, Typography, Space, InputNumber, Button, Tooltip, Spin } 
 import { HistoryOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { db } from "../Utils/dataStorege";
+import { getLatestProjectModules } from "../Utils/projectTimeline";
 import "../styles/commercialactivityplanner.css";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify";
@@ -75,11 +76,8 @@ const CommercialActivityPlanner: React.FC = () => {
             return;
         }
 
-        let timelineId: number | string | undefined;
-
         if (Array.isArray(proj.projectTimeline) && proj.projectTimeline.length > 0) {
             const latest = proj.projectTimeline[proj.projectTimeline.length - 1];
-            timelineId = latest.timelineId || latest.versionId || latest.id;
 
             setTimelineInfo({
                 status: latest.status ?? "",
@@ -90,21 +88,12 @@ const CommercialActivityPlanner: React.FC = () => {
             setTimelineInfo(null);
         }
 
-        if (!timelineId) {
+        const modules = await getLatestProjectModules(proj);
+
+        if (!modules.length) {
             setRows([]);
             setLoading(false);
             return;
-        }
-
-        const timelineData = await db.getProjectTimelineById(timelineId);
-
-        let modules: any[] = [];
-        if (Array.isArray(timelineData)) {
-            modules = timelineData;
-        } else if (timelineData && Array.isArray((timelineData as any).modules)) {
-            modules = (timelineData as any).modules;
-        } else if (timelineData && Array.isArray((timelineData as any).activities)) {
-            modules = [timelineData];
         }
 
         const budgets = await db.getActivityBudgetsForProject(String(projectId));

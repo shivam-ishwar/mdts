@@ -3,6 +3,7 @@ import { Table, Select, InputNumber, Typography, Space, Spin, Button } from "ant
 import dayjs from "dayjs";
 import { db } from "../Utils/dataStorege";
 import type { ActivityCost as ActivityCostType } from "../Utils/dataStorege";
+import { getLatestProjectModules } from "../Utils/projectTimeline";
 import "../styles/activitycost.css";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify";
@@ -32,6 +33,12 @@ interface ModulePanel {
   rows: ActivityRow[];
 }
 
+const parseCostValue = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 const ActivityCost: React.FC = () => {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -60,18 +67,7 @@ const ActivityCost: React.FC = () => {
     setLoading(true);
     const all = await db.getProjects();
     const proj = all.find((p: any) => String(p.id) === String(projectId));
-    let modules: any[] = [];
-
-    if (proj?.processedTimelineData?.length) {
-      modules = proj.processedTimelineData;
-    } else if (proj?.projectTimeline?.length) {
-      const latest = proj.projectTimeline[proj.projectTimeline.length - 1];
-      const timelineId = latest.timelineId || latest.versionId;
-      if (timelineId) {
-        const t = await db.getProjectTimelineById(timelineId);
-        modules = Array.isArray(t) ? t : [];
-      }
-    }
+    const modules = proj ? await getLatestProjectModules(proj) : [];
 
     await buildPanelsFromModules(projectId, modules);
     setLoading(false);
@@ -89,9 +85,13 @@ const ActivityCost: React.FC = () => {
       const parentCode = module.parentModuleCode || module.Code || "";
 
       const rows: ActivityRow[] = (module.activities || []).map((activity: any, actIndex: number) => {
-        const code = activity.code || activity.guicode || `act-${moduleIndex}-${actIndex}`;
+        const activityCode = String(activity.code || activity.guicode || `act-${moduleIndex}-${actIndex}`);
         const actName = activity.activityName || activity.keyActivity || "";
-        const c = map.get(String(code));
+        const c = map.get(activityCode);
+        const timelineProjectCost = parseCostValue(activity?.cost?.projectCost);
+        const timelineOpportunityCost = parseCostValue(
+          activity?.cost?.opCost ?? activity?.cost?.opportunityCost
+        );
 
         return {
           key: `activity-${moduleIndex}-${actIndex}`,
@@ -100,10 +100,10 @@ const ActivityCost: React.FC = () => {
           keyActivity: actName,
           plannedStart: activity.start ? dayjs(activity.start).format("DD-MM-YYYY") : "-",
           plannedFinish: activity.end ? dayjs(activity.end).format("DD-MM-YYYY") : "-",
-          activityCode: code,
+          activityCode,
           activityName: actName,
-          projectCost: c?.projectCost ?? null,
-          opportunityCost: c?.opportunityCost ?? null,
+          projectCost: c?.projectCost ?? timelineProjectCost,
+          opportunityCost: c?.opportunityCost ?? timelineOpportunityCost,
           moduleName,
           isModule: false,
         };
