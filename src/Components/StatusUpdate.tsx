@@ -2928,6 +2928,9 @@ export const StatusUpdate = () => {
     });
   };
 
+  const isReplannedTimeline =
+    selectedProjectTimeline?.status?.toLowerCase() === "replanned";
+
   return (
     <>
 <div className="status-heading">
@@ -3065,50 +3068,60 @@ export const StatusUpdate = () => {
 
         {selectedProject?.projectTimeline != null && (
           <div className="actions">
-            <Button
-              icon={<UploadOutlined />}
-              disabled={!selectedActivityKey}
-              onClick={() => handleOpenDocumentsModal(selectedActivityKey)}
-              className="project-timeline-btn project-timeline-btn-docs"
-            >
-              Documents
-            </Button>
+            {!isReplannedTimeline && (
+              <Button
+                icon={<UploadOutlined />}
+                disabled={!selectedActivityKey}
+                onClick={() => handleOpenDocumentsModal(selectedActivityKey)}
+                className="project-timeline-btn project-timeline-btn-docs"
+              >
+                Documents
+              </Button>
+            )}
 
-            <Button
-              icon={<DollarOutlined />}
-              disabled={!selectedActivityKey}
-              onClick={handleOpenCostCalcModal}
-              className="project-timeline-btn project-timeline-btn-cost"
-            >
-              Cost
-            </Button>
+            {!isReplannedTimeline && (
+              <Button
+                icon={<DollarOutlined />}
+                disabled={!selectedActivityKey}
+                onClick={handleOpenCostCalcModal}
+                className="project-timeline-btn project-timeline-btn-cost"
+              >
+                Cost
+              </Button>
+            )}
 
-            <Button
-              icon={<UserOutlined />}
-              disabled={!selectedActivityKey}
-              onClick={showResponsibilityModal}
-              className="project-timeline-btn project-timeline-btn-raci"
-            >
-              RACI
-            </Button>
+            {!isReplannedTimeline && (
+              <Button
+                icon={<UserOutlined />}
+                disabled={!selectedActivityKey}
+                onClick={showResponsibilityModal}
+                className="project-timeline-btn project-timeline-btn-raci"
+              >
+                RACI
+              </Button>
+            )}
 
-            <Button
-              icon={<FormOutlined />}
-              disabled={!selectedActivityKey}
-              onClick={() => setNoteModalVisible(true)}
-              className="project-timeline-btn project-timeline-btn-note"
-            >
-              Note
-            </Button>
+            {!isReplannedTimeline && (
+              <Button
+                icon={<FormOutlined />}
+                disabled={!selectedActivityKey}
+                onClick={() => setNoteModalVisible(true)}
+                className="project-timeline-btn project-timeline-btn-note"
+              >
+                Note
+              </Button>
+            )}
 
-            <Button
-              icon={<EditOutlined />}
-              disabled={!selectedActivityKey}
-              onClick={handleOpenStandardizeModal}
-              className="project-timeline-btn project-timeline-btn-standardize"
-            >
-              Standerize
-            </Button>
+            {!isReplannedTimeline && (
+              <Button
+                icon={<EditOutlined />}
+                disabled={!selectedActivityKey}
+                onClick={handleOpenStandardizeModal}
+                className="project-timeline-btn project-timeline-btn-standardize"
+              >
+                Standerize
+              </Button>
+            )}
 
             {!replaneMode && (
               <Button
@@ -3122,7 +3135,7 @@ export const StatusUpdate = () => {
               </Button>
             )}
 
-            {selectedProjectTimeline?.status !== "replanned" &&
+            {!isReplannedTimeline &&
               !replaneMode &&
               ((selectedProjectTimeline?.revisedByLog?.newUserId == getCurrentUser()?.id ||
                 (getCurrentUser()?.guiId && selectedProjectTimeline?.status !== "Pending")) ||

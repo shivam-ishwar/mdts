@@ -41,6 +41,7 @@ const Module = () => {
     const [filteredModuleData, _setFilteredModuleData] = useState<any>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [openCostCalcModal, setOpenCostCalcModal] = useState(false);
+    const [openPostSaveModal, setOpenPostSaveModal] = useState(false);
     const normalize = (s?: string) =>
         (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
     const parentModuleCode = moduleCode
@@ -262,6 +263,10 @@ const Module = () => {
             } else {
                 await db.addModule({ ...moduleData, userId });
                 notify.success("Module saved successfully!");
+                setOpenPostSaveModal(true);
+                const mods = await db.getModules();
+                setAllModules(mods.filter((mod: any) => mod.orgId == currentUser?.orgId));
+                return;
             }
 
             navigate('/create/module-library');
@@ -509,7 +514,23 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setSelectedImportModule(null);
         setModuleCodeName("");
         setModuleData({});
+        setSelectedRow(null);
+        setSelectedActivityRow(null);
         setModuleCreationMode("MANUAL");
+    };
+
+    const handleCreateAnotherModule = () => {
+        setOpenPostSaveModal(false);
+        setIsMDTSCreation(false);
+        setModuleType("PERSONAL");
+        setModuleNameError("");
+        resetModuleForm();
+        setOpenPopup(true);
+    };
+
+    const handleNavigateAfterSave = () => {
+        setOpenPostSaveModal(false);
+        navigate('/create/module-library');
     };
 
     const generateShorthand = (input: string): string => {
@@ -1794,6 +1815,25 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                         </p>
                     </div>
                 </Modal >
+
+                <Modal
+                    title="Module Created"
+                    open={openPostSaveModal}
+                    onOk={handleCreateAnotherModule}
+                    onCancel={handleNavigateAfterSave}
+                    okText="Create Another"
+                    cancelText="Go to Module Library"
+                    className="modal-container"
+                    maskClosable={false}
+                    keyboard={false}
+                    closable={false}
+                >
+                    <div style={{ padding: "0px 10px" }}>
+                        <p>
+                            Module created successfully. Do you want to create another module or go to the module library?
+                        </p>
+                    </div>
+                </Modal>
 
                 <Modal
                     title="Define Cost (₹ / Day)"
