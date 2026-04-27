@@ -3070,7 +3070,7 @@ export const StatusUpdate = () => {
           <div className="actions">
             {!isReplannedTimeline && (
               <Button
-                icon={<UploadOutlined />}
+                icon={<FileTextOutlined />}
                 disabled={!selectedActivityKey}
                 onClick={() => handleOpenDocumentsModal(selectedActivityKey)}
                 className="project-timeline-btn project-timeline-btn-docs"

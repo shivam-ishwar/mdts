@@ -5,7 +5,7 @@ import { Paper, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/ma
 import { useNavigate } from 'react-router-dom';
 import "../styles/module.css"
 import { Input, Button, Tooltip, Row, Col, Typography, Modal, Select, AutoComplete, Radio, Form, Switch } from 'antd';
-import { SearchOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, UserOutlined, BellOutlined, PlusOutlined, CloseCircleOutlined, ExclamationCircleOutlined, DollarOutlined, MinusCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { SearchOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, UserOutlined, BellOutlined, PlusOutlined, CloseCircleOutlined, ExclamationCircleOutlined, DollarOutlined, MinusCircleOutlined, FileTextOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import CreateNotification from "./CreateNotification.tsx";
 import UserRolesPage from "./AssignRACI";
 import { db } from "../Utils/dataStorege.ts";
@@ -33,11 +33,14 @@ const Module = () => {
     const [openCancelModuleCreation, setOpenCancelModuleCreation] = useState<boolean>(false);
     const [newModelName, setNewModelName] = useState<string>("");
     const [selectedOption, setSelectedOption] = useState<string>("");
-    const [options, setOptions] = useState<string[]>([]);
+    const [options, setOptions] = useState<any[]>([]);
     const [mineTypePopupOpen, setMineTypePopupOpen] = useState<boolean>(false);
     const [newMineType, setNewMineType] = useState<string>("");
     const [shorthandCode, setShorthandCode] = useState<string>("");
+    const [isEditingShorthand, setIsEditingShorthand] = useState<boolean>(false);
+    const [editingMineTypeId, setEditingMineTypeId] = useState<number | null>(null);
     const [moduleCodeName, setModuleCodeName] = useState<string>("");
+    const [isModuleCodeManuallyEdited, setIsModuleCodeManuallyEdited] = useState<boolean>(false);
     const [filteredModuleData, _setFilteredModuleData] = useState<any>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [openCostCalcModal, setOpenCostCalcModal] = useState(false);
@@ -90,6 +93,7 @@ const Module = () => {
     const [importFromType, setImportFromType] = useState("");
     const [selectedImportModule, setSelectedImportModule] = useState(null);
     const [moduleNameError, setModuleNameError] = useState("");
+    const hasActiveModule = Boolean(moduleData?.parentModuleCode);
 
     useEffect(() => {
         (async () => {
@@ -487,11 +491,11 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             guiId: generatedId,
             parentModuleCode: moduleCodeName
                 ? moduleCodeName
-                : generateTwoLetterAcronym(newModelName, existingAcronyms),
+                : getGeneratedModuleCode(newModelName),
             moduleName: newModelName,
             level: "L1",
             mineType: selectedOption,
-            activities: regenerateCodes(moduleCodeName ? moduleCodeName : generateTwoLetterAcronym(newModelName, existingAcronyms), clonedActivities),
+            activities: regenerateCodes(moduleCodeName ? moduleCodeName : getGeneratedModuleCode(newModelName), clonedActivities),
             userGuiId: currentUser?.guiId,
             orgId: currentUser?.orgId,
             createdAt: new Date().toISOString(),
@@ -513,6 +517,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setImportFromType("");
         setSelectedImportModule(null);
         setModuleCodeName("");
+        setIsModuleCodeManuallyEdited(false);
         setModuleData({});
         setSelectedRow(null);
         setSelectedActivityRow(null);
@@ -540,23 +545,83 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             .join("");
     };
 
-    const handleAddNewMineType = async () => {
-        if (newMineType && shorthandCode) {
-            const isDuplicate = options.some(
-                (opt: any) =>
-                    opt.description.trim().toLowerCase() === newMineType.trim().toLowerCase() ||
-                    opt.type.trim().toLowerCase() === shorthandCode.trim().toLowerCase()
-            );
+    const getGeneratedModuleCode = (input: string): string =>
+        generateTwoLetterAcronym(input.trim(), existingAcronyms);
 
-            if (isDuplicate) {
-                notify.error("Mine type already exists.");
-                return;
-            }
+    const resetMineTypeForm = () => {
+        setNewMineType("");
+        setShorthandCode("");
+        setIsEditingShorthand(false);
+        setEditingMineTypeId(null);
+    };
 
-            try {
+    const handleOpenAddMineType = () => {
+        resetMineTypeForm();
+        setMineTypePopupOpen(true);
+    };
+
+    const handleOpenEditMineType = (option: any) => {
+        setEditingMineTypeId(option.id ?? null);
+        setNewMineType(option.description || "");
+        setShorthandCode(option.type || "");
+        setIsEditingShorthand(false);
+        setMineTypePopupOpen(true);
+    };
+
+    const handleSubmitMineType = async () => {
+        const trimmedName = newMineType.trim();
+        const trimmedCode = shorthandCode.trim().toUpperCase();
+
+        if (!trimmedName || !trimmedCode) {
+            notify.error("Mine type name and shorthand code are required.");
+            return;
+        }
+
+        const isDuplicate = options.some(
+            (opt: any) =>
+                opt.id !== editingMineTypeId &&
+                (
+                    String(opt.description ?? "").trim().toLowerCase() === trimmedName.toLowerCase() ||
+                    String(opt.type ?? "").trim().toLowerCase() === trimmedCode.toLowerCase()
+                )
+        );
+
+        if (isDuplicate) {
+            notify.error("Mine type already exists.");
+            return;
+        }
+
+        try {
+            if (editingMineTypeId != null) {
+                const previousOption = options.find((opt: any) => opt.id === editingMineTypeId);
+                await db.updateMineType(editingMineTypeId, {
+                    type: trimmedCode,
+                    description: trimmedName,
+                });
+
+                setOptions((prev) =>
+                    prev.map((opt: any) =>
+                        opt.id === editingMineTypeId
+                            ? { ...opt, type: trimmedCode, description: trimmedName }
+                            : opt
+                    )
+                );
+
+                if (selectedOption === previousOption?.type) {
+                    setSelectedOption(trimmedCode);
+                }
+
+                setModuleData((prev: any) =>
+                    prev?.mineType === previousOption?.type
+                        ? { ...prev, mineType: trimmedCode }
+                        : prev
+                );
+
+                notify.success("Mine type updated successfully");
+            } else {
                 const mineTypeData: any = {
-                    type: shorthandCode.trim(),
-                    description: newMineType.trim(),
+                    type: trimmedCode,
+                    description: trimmedName,
                     userGuiId: currentUser?.guiId,
                     orgId: currentUser?.orgId,
                     createdAt: new Date().toISOString(),
@@ -564,21 +629,76 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                 };
 
                 const id = await db.addMineType(mineTypeData);
-                setOptions([...options, { id, ...mineTypeData }]);
-                setNewMineType("");
-                setShorthandCode("");
-                setMineTypePopupOpen(false);
+                setOptions((prev) => [...prev, { id, ...mineTypeData }]);
                 notify.success("Added Successfully");
-            } catch (error) {
-                notify.error("Error adding mine type");
             }
+
+            resetMineTypeForm();
+            setMineTypePopupOpen(false);
+        } catch (error) {
+            notify.error(editingMineTypeId != null ? "Error updating mine type" : "Error adding mine type");
         }
     };
 
     const handleMineTypeChange = (value: string) => {
         setNewMineType(value);
-        setShorthandCode(generateShorthand(value));
+        if (!isEditingShorthand) {
+            setShorthandCode(generateShorthand(value));
+        }
     };
+
+    const handleToggleShorthandEdit = () => {
+        if (isEditingShorthand) {
+            setShorthandCode((prev) => prev.trim().toUpperCase());
+        }
+        setIsEditingShorthand((prev) => !prev);
+    };
+
+    const handleCloseMineTypePopup = () => {
+        setMineTypePopupOpen(false);
+        resetMineTypeForm();
+    };
+
+    const handleDeleteMineType = (option: any) => {
+        Modal.confirm({
+            title: "Delete Mine Type",
+            icon: <ExclamationCircleOutlined />,
+            content: `Are you sure you want to delete ${option.type}?`,
+            okText: "Delete",
+            okType: "danger",
+            cancelText: "Cancel",
+            onOk: async () => {
+                try {
+                    await db.deleteMineType(option.id);
+                    setOptions((prev) => prev.filter((item: any) => item.id !== option.id));
+
+                    if (selectedOption === option.type) {
+                        setSelectedOption("");
+                        setSelectedImportModule(null);
+                    }
+
+                    setModuleData((prev: any) =>
+                        prev?.mineType === option.type
+                            ? { ...prev, mineType: "" }
+                            : prev
+                    );
+
+                    notify.success("Mine type deleted successfully");
+                } catch (error) {
+                    notify.error("Error deleting mine type");
+                }
+            },
+        });
+    };
+
+    useEffect(() => {
+        if (isModuleCodeManuallyEdited) {
+            return;
+        }
+
+        const trimmedName = newModelName.trim();
+        setModuleCodeName(trimmedName ? getGeneratedModuleCode(trimmedName) : "");
+    }, [newModelName, isModuleCodeManuallyEdited]);
 
     const getAllPrerequisites = () => {
         return moduleData.activities
@@ -1120,7 +1240,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
-                                    {hasPermission(currentUser?.role, "ADD_DOCUMENT_IN_ACTIVITY") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "ADD_DOCUMENT_IN_ACTIVITY") && (
                                         <Col>
                                             <Tooltip title="Add Document">
                                                 <Button
@@ -1132,7 +1252,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
-                                    {hasPermission(currentUser?.role, "ADD_COST_IN_ACTIVITY") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "ADD_COST_IN_ACTIVITY") && (
                                         <Col>
                                             <Tooltip title="Define Activity Cost">
                                                 <Button
@@ -1144,7 +1264,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
-                                    {hasPermission(currentUser?.role, "LEVEL_UP_DOWN") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "LEVEL_UP_DOWN") && (
                                         <Col>
                                             <Tooltip title="Decrease Level">
                                                 <Button
@@ -1156,7 +1276,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
-                                    {hasPermission(currentUser?.role, "LEVEL_UP_DOWN") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "LEVEL_UP_DOWN") && (
                                         <Col>
                                             <Tooltip title="Increase Level">
                                                 <Button
@@ -1169,34 +1289,38 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                         </Col>
                                     )}
 
-                                    <Col>
-                                        <Tooltip title="Delete">
-                                            <Button
-                                                icon={<DeleteOutlined />}
-                                                className="icon-button red"
-                                                onClick={() => setIsDeleteModalVisible(true)}
-                                                disabled={!selectedActivityRow}
-                                            />
-                                        </Tooltip>
-                                    </Col>
+                                    {hasActiveModule && (
+                                        <Col>
+                                            <Tooltip title="Delete">
+                                                <Button
+                                                    icon={<DeleteOutlined />}
+                                                    className="icon-button red"
+                                                    onClick={() => setIsDeleteModalVisible(true)}
+                                                    disabled={!selectedActivityRow}
+                                                />
+                                            </Tooltip>
+                                        </Col>
+                                    )}
 
-                                    <Col>
-                                        <Tooltip title="Undo">
-                                            <Button
-                                                icon={<RollbackOutlined />}
-                                                className="icon-button blue"
-                                                onClick={handleUndo}
-                                                disabled={undoStack.length === 0}
-                                            />
-                                        </Tooltip>
-                                    </Col>
+                                    {hasActiveModule && (
+                                        <Col>
+                                            <Tooltip title="Undo">
+                                                <Button
+                                                    icon={<RollbackOutlined />}
+                                                    className="icon-button blue"
+                                                    onClick={handleUndo}
+                                                    disabled={undoStack.length === 0}
+                                                />
+                                            </Tooltip>
+                                        </Col>
+                                    )}
 
                                     {/* <Col>
                                         <Tooltip title={`${sortOrder.toUpperCase()}`}>
                                             <Button onClick={toggleSortOrder} icon={getSortIcon()} disabled={moduleData.activities?.length == 0} className="icon-button blue" />
                                         </Tooltip>
                                     </Col> */}
-                                    {hasPermission(currentUser?.role, "ASSIGN_RASI") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "ASSIGN_RASI") && (
                                         <Col>
                                             <Tooltip title="Assign RACI">
                                                 <Button
@@ -1222,7 +1346,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Modal>
                                         </Col>
                                     )}
-                                    {hasPermission(currentUser?.role, "ASSIGN_RASI") && (
+                                    {hasActiveModule && hasPermission(currentUser?.role, "ASSIGN_RASI") && (
                                         <Col>
                                             <Tooltip title="Notifications">
                                                 <Button
@@ -1243,21 +1367,23 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Modal>
                                         </Col>
                                     )}
-                                    <Col>
-                                        <Tooltip title="Add Activity">
-                                            <Button
-                                                type="primary"
-                                                onClick={addActivity}
-                                                className="add-button"
-                                                style={{ height: "30px", fontSize: "14px" }}
-                                                disabled={!selectedRow}
-                                            >
-                                                Add Activity
-                                            </Button>
-                                        </Tooltip>
-                                    </Col>
+                                    {hasActiveModule && (
+                                        <Col>
+                                            <Tooltip title="Add Activity">
+                                                <Button
+                                                    type="primary"
+                                                    onClick={addActivity}
+                                                    className="add-button"
+                                                    style={{ height: "30px", fontSize: "14px" }}
+                                                    disabled={!selectedRow}
+                                                >
+                                                    Add Activity
+                                                </Button>
+                                            </Tooltip>
+                                        </Col>
+                                    )}
 
-                                    {hasPermission(currentUser?.role, "CREATE_NEW_Module") && !moduleData.parentModuleCode && (
+                                    {hasPermission(currentUser?.role, "CREATE_NEW_Module") && !hasActiveModule && (
                                         <>
                                             <Col>
                                                 <Tooltip title="Create New Module">
@@ -1290,7 +1416,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                         </>
                                     )}
 
-                                    {isEditing && (
+                                    {hasActiveModule && isEditing && (
                                         <Col>
                                             <Tooltip title="Update Module">
                                                 <Button
@@ -1516,17 +1642,65 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                     value={selectedOption || undefined}
                                                     onChange={setSelectedOption}
                                                     placeholder="Select mine type"
+                                                    optionLabelProp="label"
                                                 >
                                                     {options.map((option: any, index) => (
-                                                        <Select.Option key={index} value={option.type}>
-                                                            {option.type}
+                                                        <Select.Option
+                                                            key={option.id ?? index}
+                                                            value={option.type}
+                                                            label={option.type}
+                                                            title={option.description || option.type}
+                                                        >
+                                                            <div
+                                                                style={{
+                                                                    display: "flex",
+                                                                    alignItems: "center",
+                                                                    justifyContent: "space-between",
+                                                                    gap: "8px",
+                                                                }}
+                                                            >
+                                                                <Tooltip title={option.description || option.type} placement="right">
+                                                                    <span style={{ flex: 1, minWidth: 0 }}>{option.type}</span>
+                                                                </Tooltip>
+                                                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                                    <Button
+                                                                        type="text"
+                                                                        size="small"
+                                                                        icon={<EditOutlined />}
+                                                                        onMouseDown={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                        }}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            handleOpenEditMineType(option);
+                                                                        }}
+                                                                    />
+                                                                    <Button
+                                                                        type="text"
+                                                                        size="small"
+                                                                        danger
+                                                                        icon={<DeleteOutlined />}
+                                                                        onMouseDown={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                        }}
+                                                                        onClick={(e) => {
+                                                                            e.preventDefault();
+                                                                            e.stopPropagation();
+                                                                            handleDeleteMineType(option);
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
                                                         </Select.Option>
                                                     ))}
                                                 </Select>
                                                 <Button
                                                     type="dashed"
                                                     icon={<PlusOutlined />}
-                                                    onClick={() => setMineTypePopupOpen(true)}
+                                                    onClick={handleOpenAddMineType}
                                                 />
                                             </div>
                                         </Col>
@@ -1586,11 +1760,12 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                             if (selected) {
                                                                 const clonedActivities = JSON.parse(JSON.stringify(selected.activities || []));
                                                                 const newGuiId = uuidv4();
-                                                                const newModuleCode = moduleCodeName || generateTwoLetterAcronym(selected.moduleName, existingAcronyms);
+                                                                const newModuleCode = moduleCodeName || getGeneratedModuleCode(selected.moduleName);
 
                                                                 setNewModelName(selected.moduleName);
                                                                 setSelectedOption(selected.mineType);
                                                                 setModuleCodeName(newModuleCode);
+                                                                setIsModuleCodeManuallyEdited(false);
 
                                                                 setModuleData({
                                                                     guiId: newGuiId,
@@ -1632,11 +1807,12 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                             if (selected) {
                                                                 const clonedActivities = JSON.parse(JSON.stringify(selected.activities || []));
                                                                 const newGuiId = uuidv4();
-                                                                const newModuleCode = moduleCodeName || generateTwoLetterAcronym(selected.moduleName, existingAcronyms);
+                                                                const newModuleCode = moduleCodeName || getGeneratedModuleCode(selected.moduleName);
 
                                                                 setNewModelName(selected.moduleName);
                                                                 setSelectedOption(selected.mineType);
                                                                 setModuleCodeName(newModuleCode);
+                                                                setIsModuleCodeManuallyEdited(false);
 
                                                                 const willDuplicate = isDuplicateModuleName(
                                                                     selected.moduleName,
@@ -1726,7 +1902,11 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             <Input
                                                 placeholder="Enter module code"
                                                 value={moduleCodeName}
-                                                onChange={(e) => setModuleCodeName(e.target.value)}
+                                                onChange={(e) => {
+                                                    const nextValue = e.target.value.toUpperCase();
+                                                    setModuleCodeName(nextValue);
+                                                    setIsModuleCodeManuallyEdited(nextValue.trim().length > 0);
+                                                }}
                                             />
                                         </Col>
                                     </Row>
@@ -1738,11 +1918,12 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                 </Modal>
 
                 <Modal
-                    title="Add Mine Type"
+                    title={editingMineTypeId != null ? "Edit Mine Type" : "Add Mine Type"}
                     open={mineTypePopupOpen}
-                    onCancel={() => setMineTypePopupOpen(false)}
-                    onOk={handleAddNewMineType}
-                    okButtonProps={{ className: "bg-secondary" }}
+                    onCancel={handleCloseMineTypePopup}
+                    onOk={handleSubmitMineType}
+                    okText={editingMineTypeId != null ? "Update" : "Add"}
+                    okButtonProps={{ className: "bg-secondary", disabled: isEditingShorthand }}
                     cancelButtonProps={{ className: "bg-tertiary" }}
                     maskClosable={false}
                     keyboard={false}
@@ -1756,7 +1937,30 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                             style={{ marginBottom: "10px" }}
                         />
 
-                        <Typography>Shorthand Code: <strong>{shorthandCode}</strong></Typography>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <Typography style={{ margin: 0 }}>
+                                Shorthand Code:
+                            </Typography>
+                            {isEditingShorthand ? (
+                                <Input
+                                    value={shorthandCode}
+                                    onChange={(e) => setShorthandCode(e.target.value.toUpperCase())}
+                                    maxLength={10}
+                                    style={{ width: "160px" }}
+                                />
+                            ) : (
+                                <Typography style={{ margin: 0 }}>
+                                    <strong>{shorthandCode || "-"}</strong>
+                                </Typography>
+                            )}
+                            <Tooltip title={isEditingShorthand ? "Save shorthand" : "Edit shorthand"}>
+                                <Button
+                                    type="text"
+                                    icon={isEditingShorthand ? <SaveOutlined /> : <EditOutlined />}
+                                    onClick={handleToggleShorthandEdit}
+                                />
+                            </Tooltip>
+                        </div>
                     </div>
                 </Modal>
 

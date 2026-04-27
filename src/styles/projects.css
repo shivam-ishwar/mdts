@@ -1,6 +1,6 @@
 .project-container {
     display: grid;
-    grid-template-columns: minmax(240px, 20.5%) minmax(0, 79.5%);
+    grid-template-columns: minmax(240px, 22.5%) minmax(0, 77.5%);
     align-items: start;
     width: 98.5%;
     max-width: 98.5%;

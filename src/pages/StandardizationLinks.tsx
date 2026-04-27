@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button, Empty, Form, Input, Modal, Spin, Table, Tooltip } from "antd";
-import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, NodeIndexOutlined, PlusOutlined, TableOutlined } from "@ant-design/icons";
+import { Button, Empty, Form, Input, Modal, Spin, Tooltip } from "antd";
+import { ArrowLeftOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import { db, type StandardizationMaster, type StandardizedActivity } from "../Utils/dataStorege";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { notify } from "../Utils/ToastNotify";
 import "../styles/standardization-links.css";
-
-type LinkRow = {
-  id: string;
-  source: StandardizedActivity;
-  target: StandardizedActivity;
-};
 
 const makeActivityKey = (item: Partial<StandardizedActivity>) =>
   `${String(item.orgId || "")}__${String(item.moduleCode || "")}__${String(item.activityCode || "")}`;
@@ -35,7 +29,6 @@ export default function StandardizationLinks() {
   const [masters, setMasters] = useState<StandardizationMaster[]>([]);
   const [records, setRecords] = useState<StandardizedActivity[]>([]);
   const [selectedMasterName, setSelectedMasterName] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"table" | "graph">("table");
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingMaster, setEditingMaster] = useState<StandardizationMaster | null>(null);
   const [savingMaster, setSavingMaster] = useState(false);
@@ -97,20 +90,6 @@ export default function StandardizationLinks() {
       linkedCount: records.filter((item) => String(item.standardizedName || "") === String(master.name || "")).length,
     }));
   }, [masters, records]);
-
-  const linkRows = useMemo<LinkRow[]>(() => {
-    const rows: LinkRow[] = [];
-    selectedMasterRecords.forEach((source, sourceIndex) => {
-      selectedMasterRecords.slice(sourceIndex + 1).forEach((target) => {
-        rows.push({
-          id: `${makeActivityKey(source)}__${makeActivityKey(target)}`,
-          source,
-          target,
-        });
-      });
-    });
-    return rows;
-  }, [selectedMasterRecords]);
 
   const openCreateMaster = () => {
     setEditingMaster(null);
@@ -234,6 +213,7 @@ export default function StandardizationLinks() {
     });
   };
 
+  /*
   const renderGraph = () => {
     const leftItems = selectedMasterRecords.filter((_, index) => index % 2 === 0);
     const rightItems = selectedMasterRecords.filter((_, index) => index % 2 === 1);
@@ -251,7 +231,6 @@ export default function StandardizationLinks() {
             <p className="page-heading-title">{selectedMasterName}</p>
             <span className="pl-subtitle">Update activity progress, actual dates, and execution status</span>
           </div>
-          <Button type="text" icon={<TableOutlined />} onClick={() => setViewMode("table")} />
         </div>
 
         <div className="sl-page-graph-shell">
@@ -293,6 +272,7 @@ export default function StandardizationLinks() {
       </section>
     );
   };
+  */
 
   return (
     <div className="sl-page-root">
@@ -374,62 +354,67 @@ export default function StandardizationLinks() {
             <section className="sl-page-panel sl-page-empty-panel">
               <Empty description="No activity linked with this standardization." />
             </section>
-          ) : viewMode === "table" ? (
-            <section className="sl-page-panel sl-page-table-panel">
-              <div className="sl-page-panel-toolbar">
-                <div>
-                  <div className="sl-page-section-title">{selectedMasterName}</div>
-                  <div className="sl-page-section-subtitle">Activities linked to this standardization.</div>
-                </div>
-                <Button type="text" icon={<NodeIndexOutlined />} onClick={() => setViewMode("graph")} />
-              </div>
-              <Table
-                rowKey="id"
-                dataSource={linkRows}
-                pagination={false}
-                className="sl-page-table"
-                columns={[
-                  {
-                    title: "Activity",
-                    key: "sourceActivity",
-                    render: (_: unknown, row: LinkRow) => row.source.activityName || "Activity",
-                  },
-                  {
-                    title: "Module",
-                    key: "sourceModule",
-                    render: (_: unknown, row: LinkRow) => row.source.moduleName || "Module",
-                  },
-                  {
-                    title: "Linked Activity",
-                    key: "targetActivity",
-                    render: (_: unknown, row: LinkRow) => row.target.activityName || "Activity",
-                  },
-                  {
-                    title: "Linked Module",
-                    key: "targetModule",
-                    render: (_: unknown, row: LinkRow) => row.target.moduleName || "Module",
-                  },
-                  {
-                    title: "Action",
-                    key: "action",
-                    width: 120,
-                    render: (_: unknown, row: LinkRow) => (
-                      <Button
-                        danger
-                        type="text"
-                        icon={<DeleteOutlined />}
-                        loading={deletingKey === makeActivityKey(row.target)}
-                        onClick={() => handleDeleteLinkedActivity(row.target)}
-                      >
-                        Delete
-                      </Button>
-                    ),
-                  },
-                ]}
-              />
-            </section>
           ) : (
-            renderGraph()
+            <>
+              {/* Hidden table section kept here for future use.
+              <section className="sl-page-panel sl-page-table-panel">
+                <div className="sl-page-panel-toolbar">
+                  <div>
+                    <div className="sl-page-section-title">{selectedMasterName}</div>
+                    <div className="sl-page-section-subtitle">Activities linked to this standardization.</div>
+                  </div>
+                  <Button type="text" icon={<NodeIndexOutlined />} onClick={() => setViewMode("graph")} />
+                </div>
+                <Table
+                  rowKey="id"
+                  dataSource={linkRows}
+                  pagination={false}
+                  className="sl-page-table"
+                  columns={[
+                    {
+                      title: "Activity",
+                      key: "sourceActivity",
+                      render: (_: unknown, row: LinkRow) => row.source.activityName || "Activity",
+                    },
+                    {
+                      title: "Module",
+                      key: "sourceModule",
+                      render: (_: unknown, row: LinkRow) => row.source.moduleName || "Module",
+                    },
+                    {
+                      title: "Linked Activity",
+                      key: "targetActivity",
+                      render: (_: unknown, row: LinkRow) => row.target.activityName || "Activity",
+                    },
+                    {
+                      title: "Linked Module",
+                      key: "targetModule",
+                      render: (_: unknown, row: LinkRow) => row.target.moduleName || "Module",
+                    },
+                    {
+                      title: "Action",
+                      key: "action",
+                      width: 120,
+                      render: (_: unknown, row: LinkRow) => (
+                        <Button
+                          danger
+                          type="text"
+                          icon={<DeleteOutlined />}
+                          loading={deletingKey === makeActivityKey(row.target)}
+                          onClick={() => handleDeleteLinkedActivity(row.target)}
+                        >
+                          Delete
+                        </Button>
+                      ),
+                    },
+                  ]}
+                />
+              </section>
+              */}
+              {/* Hidden graph section kept here for future use.
+              {renderGraph()}
+              */}
+            </>
           )}
         </div>
         </>

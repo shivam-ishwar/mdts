@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "../styles/user-management.css";
-import { Button, Form, Input, Modal, Select, Switch, Table, Tooltip } from "antd";
-import { ExclamationCircleOutlined, UploadOutlined, UserAddOutlined } from "@ant-design/icons";
+import { Button, Form, Input, Modal, Select, Space, Switch, Table, Tooltip } from "antd";
+import { DeleteOutlined, EditOutlined, ExclamationCircleOutlined, KeyOutlined, UploadOutlined, UserAddOutlined } from "@ant-design/icons";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { db } from "../Utils/dataStorege.ts";
 import { ToastContainer } from "react-toastify";
@@ -9,6 +9,7 @@ import { notify } from "../Utils/ToastNotify.tsx";
 import { v4 as uuidv4 } from "uuid";
 import "react-phone-input-2/lib/style.css";
 import PhoneInput from "react-phone-input-2";
+import { hasPermission } from "../Utils/auth.ts";
 
 const { Option } = Select;
 
@@ -62,12 +63,16 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
   const [openRACIModal, setOpenRACIModal] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
   const [addMemberModalVisible, setAddMemberModalVisible] = useState(false);
+  const [editMemberModalVisible, setEditMemberModalVisible] = useState(false);
+  const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState(false);
   const [bulkImportModalVisible, setBulkImportModalVisible] = useState(false);
   const [bulkJson, setBulkJson] = useState("");
   const [bulkResult, setBulkResult] = useState<{ ok: number; skipped: number; failed: number } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<any>({});
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [userToResetPassword, setUserToResetPassword] = useState<User | null>(null);
 
   const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>({
     email: true,
@@ -76,10 +81,12 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
   });
 
   const [form] = Form.useForm();
-
-  const handleViewUser = (record: User) => {
-    setSelectedUser(record);
-  };
+  const [editForm] = Form.useForm();
+  const [resetPasswordForm] = Form.useForm();
+  const canAddMember = hasPermission(currentUser?.role, "ADD_TEAM_MEMBER");
+  const canEditMember = hasPermission(currentUser?.role, "EDIT_TEAM_MEMBER");
+  const canRemoveMember = hasPermission(currentUser?.role, "REMOVE_TEAM_MEMBER");
+  const canAssignRole = hasPermission(currentUser?.role, "ASSIGN_ROLE_TO_TEAM_MEMBER");
 
   const handleCloseModal = () => {
     setOpenAlertModal(false);
@@ -162,6 +169,27 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
     }
   };
 
+  const refreshUsers = async (orgId: string | null | undefined) => {
+    if (!orgId) {
+      setUsers([]);
+      return;
+    }
+
+    const allUsers = (await db.getUsers()).filter((u: any) => u.orgId == orgId);
+    setUsers(allUsers);
+  };
+
+  const generatePassword = () => {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+    let nextPassword = "";
+
+    for (let i = 0; i < 12; i += 1) {
+      nextPassword += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+    }
+
+    return nextPassword;
+  };
+
   const handleRoleChange = async (userId: any, newRole: any) => {
     try {
       const selected = await db.getUserById(userId);
@@ -178,6 +206,26 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
   const openDeleteModal = (record: User) => {
     setUserToDelete(record);
     setIsDeleteModalVisible(true);
+  };
+
+  const openEditModal = (record: User) => {
+    setUserToEdit(record);
+    editForm.setFieldsValue({
+      employeeFullName: record.name,
+      designation: record.designation,
+      mobile: record.mobile === "N/A" ? "" : record.mobile,
+      permissionProfile: record.role,
+      emails: record.email,
+    });
+    setEditMemberModalVisible(true);
+  };
+
+  const openResetPasswordModal = (record: User) => {
+    setUserToResetPassword(record);
+    resetPasswordForm.setFieldsValue({
+      password: record.password || "",
+    });
+    setResetPasswordModalVisible(true);
   };
 
   useEffect(() => {
@@ -229,7 +277,7 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
           value={role}
           onChange={(value) => handleRoleChange(record.id, value)}
           style={{ width: 140 }}
-          disabled={currentUser?.id === record.id}
+          disabled={currentUser?.id === record.id || !canAssignRole}
         >
           <Option value="admin">Admin</Option>
           <Option value="manager">Manager</Option>
@@ -255,13 +303,39 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
       title: "Action",
       key: "action",
       align: "center",
-      width: 120,
+      width: 160,
       render: (_: any, record: User) => (
-        <Tooltip title={currentUser?.id === record.id ? "You can't delete yourself" : "Remove user"}>
-          <Button danger size="small" disabled={currentUser?.id === record.id} onClick={() => openDeleteModal(record)}>
-            Delete
-          </Button>
-        </Tooltip>
+        <Space size="small">
+          {canEditMember && (
+            <Tooltip title="Edit member">
+              <Button
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => openEditModal(record)}
+              />
+            </Tooltip>
+          )}
+          {canEditMember && (
+            <Tooltip title="Reset password">
+              <Button
+                size="small"
+                icon={<KeyOutlined />}
+                onClick={() => openResetPasswordModal(record)}
+              />
+            </Tooltip>
+          )}
+          {canRemoveMember && (
+            <Tooltip title={currentUser?.id === record.id ? "You can't delete yourself" : "Remove user"}>
+              <Button
+                danger
+                size="small"
+                icon={<DeleteOutlined />}
+                disabled={currentUser?.id === record.id}
+                onClick={() => openDeleteModal(record)}
+              />
+            </Tooltip>
+          )}
+        </Space>
       ),
     },
   ];
@@ -396,7 +470,7 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
               <span className="pl-subtitle">Manage team members, roles, and organization access</span>
             </div>
 
-            {options?.isAddMember && (
+            {options?.isAddMember && canAddMember && (
               <div style={{ display: "flex", gap: 8 }}>
                 <Tooltip title="Import members from JSON">
                   <Button
@@ -434,10 +508,6 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
               bordered
               pagination={{ pageSize: 10 }}
               scroll={{ x: "max-content", y: "calc(100vh - 300px)" }}
-              rowClassName={(record: any) => (selectedUser?.id === record.id ? "user-profile-selected-row" : "")}
-              onRow={(record: User) => ({
-                onDoubleClick: () => handleViewUser(record),
-              })}
             />
           </div>
         </div>
@@ -569,7 +639,10 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
         <Modal
           title="Add Member"
           open={addMemberModalVisible}
-          onCancel={() => setAddMemberModalVisible(false)}
+          onCancel={() => {
+            setAddMemberModalVisible(false);
+            form.resetFields();
+          }}
           onOk={handleSendInvites}
           okText="Save"
           okButtonProps={{ className: "bg-secondary" }}
@@ -655,6 +728,182 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
         </Modal>
 
         <Modal
+          title="Edit Member"
+          open={editMemberModalVisible}
+          onCancel={() => {
+            setEditMemberModalVisible(false);
+            setUserToEdit(null);
+            editForm.resetFields();
+          }}
+          onOk={async () => {
+            try {
+              if (!userToEdit) return;
+
+              const values = await editForm.validateFields();
+              const allUsers = await db.getUsers();
+              const duplicateEmail = allUsers
+                .filter((u: any) => u.orgId == currentUser?.orgId && u.id !== userToEdit.id)
+                .some((u: any) => normalizeText(u.email) === normalizeText(values.emails));
+
+              if (duplicateEmail) {
+                notify.error("Email already registered");
+                return;
+              }
+
+              const updatedUser = {
+                ...userToEdit,
+                name: values.employeeFullName,
+                designation: values.designation,
+                mobile: normalizeMobile(values.mobile),
+                whatsapp: normalizeMobile(values.mobile),
+                email: String(values.emails).trim().toLowerCase(),
+                role: values.permissionProfile,
+              };
+
+              await db.updateUsers(userToEdit.id, updatedUser);
+              await refreshUsers(currentUser?.orgId);
+              notify.success("Member updated successfully!");
+              setEditMemberModalVisible(false);
+              setUserToEdit(null);
+              editForm.resetFields();
+            } catch (error: any) {
+              console.error(error);
+              notify.error(error?.message || "Failed to update member");
+            }
+          }}
+          okText="Save"
+          okButtonProps={{ className: "bg-secondary" }}
+          cancelButtonProps={{ className: "bg-tertiary" }}
+          width="50%"
+          className="modal-container"
+        >
+          <div className="modal-body" style={{ padding: "0px 10px" }}>
+            <Form form={editForm} layout="vertical" style={{ marginTop: 16 }}>
+              <Form.Item
+                name="employeeFullName"
+                label="Full Name"
+                rules={[{ required: true, message: "Please enter the employee full name!" }]}
+              >
+                <Input placeholder="Enter full name" />
+              </Form.Item>
+
+              <Form.Item
+                name="designation"
+                label="Designation"
+                rules={[{ required: true, message: "Please select designation" }]}
+              >
+                <Select placeholder="Select Designation">
+                  <Option value="Mining Engineer">Mining Engineer</Option>
+                  <Option value="Geologist">Geologist</Option>
+                  <Option value="Operations Manager">Operations Manager</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                name="mobile"
+                label="Mobile Number"
+                rules={[
+                  { required: true, message: "Please enter mobile number!" },
+                  {
+                    validator: (_, value) => {
+                      const numeric = String(value ?? "").replace(/\D/g, "");
+                      if (!numeric || numeric.length < 10) {
+                        return Promise.reject("Enter a valid 10-digit mobile number with country code");
+                      }
+                      return Promise.resolve();
+                    },
+                  },
+                ]}
+              >
+                <Input placeholder="Enter mobile number with country code" />
+              </Form.Item>
+
+              <Form.Item
+                name="permissionProfile"
+                label="Set permission profile"
+                rules={[{ required: true, message: "Please select a permission profile!" }]}
+              >
+                <Select placeholder="Select...">
+                  <Option value="admin">Admin</Option>
+                  <Option value="manager">Manager</Option>
+                  <Option value="employee">Employee</Option>
+                </Select>
+              </Form.Item>
+
+              <Form.Item
+                name="emails"
+                label="Email Address"
+                rules={[
+                  { required: true, message: "Email is required" },
+                  {
+                    pattern: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                    message: "Enter a valid email address",
+                  },
+                ]}
+              >
+                <Input placeholder="Enter email address" />
+              </Form.Item>
+            </Form>
+          </div>
+        </Modal>
+
+        <Modal
+          title="Reset Password"
+          open={resetPasswordModalVisible}
+          onCancel={() => {
+            setResetPasswordModalVisible(false);
+            setUserToResetPassword(null);
+            resetPasswordForm.resetFields();
+          }}
+          onOk={async () => {
+            try {
+              if (!userToResetPassword) return;
+
+              const values = await resetPasswordForm.validateFields();
+              const updatedUser = {
+                ...userToResetPassword,
+                password: values.password,
+                isTempPassword: true,
+              };
+
+              await db.updateUsers(userToResetPassword.id, updatedUser);
+              await refreshUsers(currentUser?.orgId);
+              notify.success("Password reset successfully!");
+              setResetPasswordModalVisible(false);
+              setUserToResetPassword(null);
+              resetPasswordForm.resetFields();
+            } catch (error: any) {
+              console.error(error);
+              notify.error(error?.message || "Failed to reset password");
+            }
+          }}
+          okText="Save"
+          okButtonProps={{ className: "bg-secondary" }}
+          cancelButtonProps={{ className: "bg-tertiary" }}
+          width="40%"
+          className="modal-container"
+        >
+          <div style={{ padding: "8px 10px 0" }}>
+            <Form form={resetPasswordForm} layout="vertical">
+              <Form.Item
+                name="password"
+                label="New Password"
+                rules={[
+                  { required: true, message: "Please enter a password" },
+                  { min: 8, message: "Password must be at least 8 characters" },
+                ]}
+                extra="You can type your own password, keep the current one, or generate a new one."
+              >
+                <Input.Password placeholder="Enter new password" visibilityToggle />
+              </Form.Item>
+              <Button onClick={() => resetPasswordForm.setFieldsValue({ password: generatePassword() })}>
+                Generate Password
+              </Button>
+            </Form>
+          </div>
+        </Modal>
+
+        <Modal
           title="Confirm Delete"
           open={isDeleteModalVisible}
           onOk={async () => {
@@ -680,8 +929,7 @@ const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
                   await db.updateCompany(company.id, updatedCompany);
                 }
               }
-              const allUsers = (await db.getUsers()).filter((u: any) => u.orgId == cu?.orgId);
-              setUsers(allUsers);
+              await refreshUsers(cu?.orgId);
               notify.success("User removed successfully");
             } catch (e: any) {
               console.error(e);

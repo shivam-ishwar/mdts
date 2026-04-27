@@ -1,7 +1,7 @@
 .people-search-container {
     width: 100%;
     max-width: 100%;
-    margin: 10px 0;
+    margin: 0px;
     box-shadow: var(--shadow-sm);
     overflow: hidden;
     box-sizing: border-box;

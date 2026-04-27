@@ -271,6 +271,8 @@ const Charts = (props: any) => {
     const [ganttDateIntervalDays, setGanttDateIntervalDays] = useState<number>(15);
     const [ganttQuickRange, setGanttQuickRange] = useState<GanttQuickRange>("15D");
     const ganttRightFrameRef = useRef<HTMLDivElement | null>(null);
+    const ganttBodyScrollRef = useRef<HTMLDivElement | null>(null);
+    const ganttAxisScrollRef = useRef<HTMLDivElement | null>(null);
     const metricsRailRef = useRef<HTMLDivElement | null>(null);
     const [ganttViewportWidth, setGanttViewportWidth] = useState(0);
     const [canScrollMetricsLeft, setCanScrollMetricsLeft] = useState(false);
@@ -697,8 +699,8 @@ const Charts = (props: any) => {
         const sorted = uniqueSorted(ticks);
         return { ganttAxisTicks: sorted, ganttAxisEndOffset: sorted[sorted.length - 1] ?? lastOffset };
     }, [ganttDateIntervalDays, ganttTotalDays]);
-    const ganttLabelColumnWidth = 150;
-    const ganttLabelTickWidth = 188;
+    const ganttLabelColumnWidth = 220;
+    const ganttLabelTickWidth = ganttLabelColumnWidth - 32;
     const ganttPxPerDay = useMemo(() => {
         if (ganttQuickRange === "1D") return 14;
         if (ganttQuickRange === "7D") return 10;
@@ -734,6 +736,37 @@ const Charts = (props: any) => {
         return Math.max(baseWidth, Math.ceil(viewport * minWidthFactor));
     }, [ganttAxisEndOffset, ganttPxPerDay, ganttQuickRange, ganttViewportWidth]);
     const ganttInnerWidth = Math.max(ganttViewportWidth, ganttContentWidth);
+    const ganttContentHeight = Math.max(520, ganttData.length * 44);
+    const ganttXAxisHeight = 58;
+    const ganttViewportHeight = Math.min(ganttContentHeight + ganttXAxisHeight, 420);
+    const ganttBodyViewportHeight = Math.max(220, ganttViewportHeight - ganttXAxisHeight);
+
+    useEffect(() => {
+        const bodyScroll = ganttBodyScrollRef.current;
+        const axisScroll = ganttAxisScrollRef.current;
+        if (!bodyScroll || !axisScroll) return;
+
+        const syncAxis = () => {
+            if (Math.abs(axisScroll.scrollLeft - bodyScroll.scrollLeft) > 1) {
+                axisScroll.scrollLeft = bodyScroll.scrollLeft;
+            }
+        };
+
+        const syncBody = () => {
+            if (Math.abs(bodyScroll.scrollLeft - axisScroll.scrollLeft) > 1) {
+                bodyScroll.scrollLeft = axisScroll.scrollLeft;
+            }
+        };
+
+        bodyScroll.addEventListener("scroll", syncAxis, { passive: true });
+        axisScroll.addEventListener("scroll", syncBody, { passive: true });
+        syncAxis();
+
+        return () => {
+            bodyScroll.removeEventListener("scroll", syncAxis);
+            axisScroll.removeEventListener("scroll", syncBody);
+        };
+    }, [ganttInnerWidth, ganttData.length]);
 
     const healthRows = useMemo(() => {
         const today = toLocalMidnight(new Date());
@@ -1120,9 +1153,9 @@ const Charts = (props: any) => {
             const label = String(payload?.value ?? "");
             return (
                 <g>
-                    <foreignObject x={x - ganttLabelTickWidth} y={y - 10} width={ganttLabelTickWidth} height={20}>
-                        <div className="ganttYAxisTick" title={label}>
-                            {label}
+                    <foreignObject x={x - ganttLabelTickWidth} y={y - 12} width={ganttLabelTickWidth} height={24}>
+                        <div className="ganttYAxisTick" title={label} aria-label={label}>
+                            <span className="ganttYAxisTickText">{label}</span>
                         </div>
                     </foreignObject>
                 </g>
@@ -1414,82 +1447,112 @@ const Charts = (props: any) => {
                 {!ganttData.length ? (
                     <div className="emptyState">No Content</div>
                 ) : (
-                    <div className="chartWrap ganttChartWrap" style={{ height: Math.max(520, ganttData.length * 44) }}>
-                        <div className="ganttSplit">
-                            <div className="ganttFixedY" style={{ width: `${ganttLabelColumnWidth}px`, flex: `0 0 ${ganttLabelColumnWidth}px` }}>
-                                <ResponsiveContainer>
-                                    <BarChart
-                                        data={ganttData}
-                                        layout="vertical"
-                                        margin={{ top: 10, right: 0, bottom: 10, left: 24 }}
-                                        barCategoryGap={14}
-                                        barGap={8}
-                                    >
-                                        <XAxis type="number" hide domain={[0, ganttAxisEndOffset]} />
+                    <div className="chartWrap ganttChartWrap">
+                        <div className="ganttViewport" style={{ height: `${ganttViewportHeight}px` }}>
+                            <div className="ganttBodyViewport" style={{ height: `${ganttBodyViewportHeight}px` }}>
+                                <div className="ganttSplit" style={{ height: `${ganttContentHeight}px` }}>
+                                    <div className="ganttFixedY" style={{ width: `${ganttLabelColumnWidth}px`, flex: `0 0 ${ganttLabelColumnWidth}px` }}>
+                                        <div className="ganttYInner" style={{ height: `${ganttContentHeight}px` }}>
+                                            <ResponsiveContainer>
+                                                <BarChart
+                                                    data={ganttData}
+                                                    layout="vertical"
+                                                    margin={{ top: 10, right: 0, bottom: 10, left: 24 }}
+                                                    barCategoryGap={14}
+                                                    barGap={8}
+                                                >
+                                                    <XAxis type="number" hide domain={[0, ganttAxisEndOffset]} />
 
-                                        <YAxis
-                                            type="category"
-                                            dataKey="name"
-                                            width={ganttLabelTickWidth}
-                                            tick={renderGanttYAxisTick}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
+                                                    <YAxis
+                                                        type="category"
+                                                        dataKey="name"
+                                                        width={ganttLabelTickWidth}
+                                                        tick={renderGanttYAxisTick}
+                                                        axisLine
+                                                        tickLine={false}
+                                                    />
 
-                                        <Bar dataKey="plannedDuration" fill="rgba(0,0,0,0)" isAnimationActive={false} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                                                    <Bar dataKey="plannedDuration" fill="rgba(0,0,0,0)" isAnimationActive={false} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    <div className="ganttRightFrame" ref={ganttRightFrameRef}>
+                                        <div className="ganttScrollShell" ref={ganttBodyScrollRef}>
+                                            <div className="ganttInner" style={{ width: `${ganttInnerWidth}px`, height: `${ganttContentHeight}px` }}>
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart
+                                                        data={ganttData}
+                                                        layout="vertical"
+                                                        margin={{ top: 10, right: 30, bottom: 10, left: 26 }}
+                                                        barCategoryGap={14}
+                                                        barGap={8}
+                                                    >
+                                                        <CartesianGrid strokeDasharray="3 3" />
+
+                                                        <XAxis type="number" hide domain={[0, ganttAxisEndOffset]} />
+
+                                                        <YAxis type="category" dataKey="name" hide />
+
+                                                        <Tooltip content={<CustomTooltip />} />
+
+                                                        <Bar dataKey="plannedOffset" stackId="planned" fill="rgba(0,0,0,0)" legendType="none" />
+                                                        <Bar dataKey="plannedDuration" stackId="planned" name="Planned (Baseline)" fill="#64748b" radius={[10, 10, 10, 10]}>
+                                                            {ganttData.map((row) => (
+                                                                <Cell
+                                                                    key={`planned-${row.id}`}
+                                                                    fill={row.executionStatus === "Yet To Start" ? ganttStatusColors["Yet To Start"] : "#64748b"}
+                                                                />
+                                                            ))}
+                                                        </Bar>
+
+                                                        <Bar dataKey="actualOffset" stackId="actual" fill="rgba(0,0,0,0)" legendType="none" />
+                                                        <Bar dataKey="actualDuration" stackId="actual" name="Actual" fill="#0ea5e9" radius={[10, 10, 10, 10]}>
+                                                            {ganttData.map((row) => (
+                                                                <Cell key={`actual-${row.id}`} fill={ganttStatusColors[row.executionStatus]} />
+                                                            ))}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
+                            <div className="ganttAxisRow">
+                                <div className="ganttYAxisCorner" style={{ width: `${ganttLabelColumnWidth}px`, flex: `0 0 ${ganttLabelColumnWidth}px`, height: `${ganttXAxisHeight}px` }} />
+                                <div className="ganttXAxisDock" style={{ height: `${ganttXAxisHeight}px` }}>
+                                    <div className="ganttAxisScrollShell" ref={ganttAxisScrollRef}>
+                                        <div className="ganttInner ganttAxisInner" style={{ width: `${ganttInnerWidth}px`, height: `${ganttXAxisHeight}px` }}>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart
+                                                    data={ganttData}
+                                                    layout="vertical"
+                                                    margin={{ top: 0, right: 30, bottom: 10, left: 26 }}
+                                                    barCategoryGap={14}
+                                                    barGap={8}
+                                                >
+                                                    <XAxis
+                                                        type="number"
+                                                        domain={[0, ganttAxisEndOffset]}
+                                                        ticks={ganttAxisTicks}
+                                                        interval="preserveStartEnd"
+                                                        tickMargin={10}
+                                                        height={ganttXAxisHeight}
+                                                        tick={{ fontSize: 12 }}
+                                                        tickFormatter={ganttAxisTickFormatter}
+                                                        allowDecimals={false}
+                                                        axisLine={{ stroke: "rgba(15, 23, 42, 0.58)", strokeWidth: 1.5 }}
+                                                        tickLine={false}
+                                                    />
 
-                            <div className="ganttRightFrame" ref={ganttRightFrameRef}>
-                                <div className="ganttScrollShell">
-                                    <div className="ganttInner" style={{ width: `${ganttInnerWidth}px` }}>
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart
-                                                data={ganttData}
-                                                layout="vertical"
-                                                margin={{ top: 10, right: 30, bottom: 10, left: 26 }}
-                                                barCategoryGap={14}
-                                                barGap={8}
-                                            >
-                                                <CartesianGrid strokeDasharray="3 3" />
+                                                    <YAxis type="category" dataKey="name" hide />
 
-                                                <XAxis
-                                                    type="number"
-                                                    domain={[0, ganttAxisEndOffset]}
-                                                    ticks={ganttAxisTicks}
-                                                    interval="preserveStartEnd"
-                                                    tickMargin={10}
-                                                    height={58}
-                                                    tick={{ fontSize: 12 }}
-                                                    tickFormatter={ganttAxisTickFormatter}
-                                                    allowDecimals={false}
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                />
-
-                                                <YAxis type="category" dataKey="name" hide />
-
-                                                <Tooltip content={<CustomTooltip />} />
-
-                                                <Bar dataKey="plannedOffset" stackId="planned" fill="rgba(0,0,0,0)" legendType="none" />
-                                                <Bar dataKey="plannedDuration" stackId="planned" name="Planned (Baseline)" fill="#64748b" radius={[10, 10, 10, 10]}>
-                                                    {ganttData.map((row) => (
-                                                        <Cell
-                                                            key={`planned-${row.id}`}
-                                                            fill={row.executionStatus === "Yet To Start" ? ganttStatusColors["Yet To Start"] : "#64748b"}
-                                                        />
-                                                    ))}
-                                                </Bar>
-
-                                                <Bar dataKey="actualOffset" stackId="actual" fill="rgba(0,0,0,0)" legendType="none" />
-                                                <Bar dataKey="actualDuration" stackId="actual" name="Actual" fill="#0ea5e9" radius={[10, 10, 10, 10]}>
-                                                    {ganttData.map((row) => (
-                                                        <Cell key={`actual-${row.id}`} fill={ganttStatusColors[row.executionStatus]} />
-                                                    ))}
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
+                                                    <Bar dataKey="plannedDuration" fill="rgba(0,0,0,0)" isAnimationActive={false} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

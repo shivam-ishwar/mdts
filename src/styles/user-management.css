@@ -88,11 +88,6 @@
     background: rgba(209, 250, 229, 0.45) !important;
 }
 
-.user-profile-selected-row>td {
-    background: rgba(52, 211, 153, 0.18) !important;
-    font-weight: 800;
-}
-
 .user-profile-main .ant-pagination .ant-pagination-item a {
     color: var(--up-text-2) !important;
 }
@@ -393,10 +388,6 @@
 
 [data-theme="dark"] .user-profile-table-shell .user-profile-table .ant-table-tbody>tr:hover>td {
     background: rgba(52, 211, 153, 0.08) !important;
-}
-
-[data-theme="dark"] .user-profile-selected-row>td {
-    background: rgba(52, 211, 153, 0.1) !important;
 }
 
 [data-theme="dark"] .user-profile-main .bg-secondary:hover {

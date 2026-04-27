@@ -335,6 +335,14 @@ export class DataStorage extends Dexie {
     return this.mineTypes.toArray();
   }
 
+  async updateMineType(id: number, mineType: Partial<MineType>): Promise<number> {
+    return this.mineTypes.update(id, mineType);
+  }
+
+  async deleteMineType(id: number): Promise<void> {
+    await this.mineTypes.delete(id);
+  }
+
   async addProject(project: any): Promise<number> {
     return this.projects.add(project);
   }

@@ -86,7 +86,7 @@
   flex-wrap: wrap;
   gap: 12px;
   align-items: flex-start;
-  border-bottom: 1px solid #ddd;
+  /* border-bottom: 1px solid #ddd; */
   padding-bottom: 20px;
 }
 
