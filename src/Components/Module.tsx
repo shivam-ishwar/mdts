@@ -1254,6 +1254,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
+                                    {/* Cost action hidden for activity creation flow
                                     {hasActiveModule && hasPermission(currentUser?.role, "ADD_COST_IN_ACTIVITY") && (
                                         <Col>
                                             <Tooltip title="Define Activity Cost">
@@ -1266,6 +1267,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Tooltip>
                                         </Col>
                                     )}
+                                    */}
                                     {hasActiveModule && hasPermission(currentUser?.role, "LEVEL_UP_DOWN") && (
                                         <Col>
                                             <Tooltip title="Decrease Level">
@@ -1322,6 +1324,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             <Button onClick={toggleSortOrder} icon={getSortIcon()} disabled={moduleData.activities?.length == 0} className="icon-button blue" />
                                         </Tooltip>
                                     </Col> */}
+                                    {/* RACI action hidden for activity creation flow
                                     {hasActiveModule && hasPermission(currentUser?.role, "ASSIGN_RASI") && (
                                         <Col>
                                             <Tooltip title="Assign RACI">
@@ -1348,6 +1351,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             </Modal>
                                         </Col>
                                     )}
+                                    */}
                                     {hasActiveModule && hasPermission(currentUser?.role, "ASSIGN_RASI") && (
                                         <Col>
                                             <Tooltip title="Notifications">
@@ -1418,20 +1422,6 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                         </>
                                     )}
 
-                                    {hasActiveModule && isEditing && (
-                                        <Col>
-                                            <Tooltip title="Update Module">
-                                                <Button
-                                                    type="primary"
-                                                    onClick={() => setOpenCancelUpdateModulePopup(true)}
-                                                    className="bg-tertiary"
-                                                    style={{ height: "30px", fontSize: "14px" }}
-                                                >
-                                                    Cancel
-                                                </Button>
-                                            </Tooltip>
-                                        </Col>
-                                    )}
                                 </Row>
                             </Col>
                         </Row>
@@ -1550,6 +1540,16 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                 style={{ backgroundColor: "#e74c3c", borderColor: "#e74c3c", marginRight: '20px' }}
                             >
                                 Discard
+                            </Button>
+                        )}
+                        {isEditing && (
+                            <Button
+                                type="primary"
+                                icon={<CloseCircleOutlined />}
+                                onClick={() => setOpenCancelUpdateModulePopup(true)}
+                                style={{ backgroundColor: "#e74c3c", borderColor: "#e74c3c", marginRight: '8px' }}
+                            >
+                                Cancel
                             </Button>
                         )}
                         <Button

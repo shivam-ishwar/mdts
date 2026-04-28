@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Button, Select, Modal, Input, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover } from "antd";
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, ExclamationCircleOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUser } from '../Utils/moduleStorage';
@@ -17,6 +17,7 @@ import { notify } from "../Utils/ToastNotify.tsx";
 import { UserOutlined } from '@ant-design/icons';
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import type { ActivityBudget, ActivityCost, StandardizedActivity } from "../Utils/dataStorege";
+import riskFactorActionIcon from "../assets/risk-factor-action-icon.png";
 
 dayjs.extend(customParseFormat);
 interface Activity {
@@ -77,8 +78,10 @@ export const StatusUpdate = () => {
   const [confirmReplan, setConfirmReplan] = useState(false);
   const [userOptions, setUserOptions] = useState<any>([]);
   const [openResponsibilityModal, setOpenResponsibilityModal] = useState(false);
+  const [openControllabilityModal, setOpenControllabilityModal] = useState(false);
   const [openStandardizeModal, setOpenStandardizeModal] = useState(false);
   const [raciForm] = Form.useForm();
+  const [controllabilityForm] = Form.useForm();
   const [standardizeForm] = Form.useForm();
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isEditUser, setIsEditUser] = useState(false);
@@ -215,6 +218,15 @@ export const StatusUpdate = () => {
       }
     }
   }, [openResponsibilityModal, selectedActivityKey]);
+
+  useEffect(() => {
+    if (openControllabilityModal && selectedActivityKey) {
+      const activity = findActivityByKey(dataSource, selectedActivityKey);
+      controllabilityForm.setFieldsValue({
+        controllabilityFactor: activity?.controllabilityFactor || undefined,
+      });
+    }
+  }, [openControllabilityModal, selectedActivityKey, dataSource, controllabilityForm]);
 
   useEffect(() => {
     if (openStandardizeModal && selectedActivityKey) {
@@ -623,6 +635,14 @@ export const StatusUpdate = () => {
       setSequencedModules(libraryItems);
       let editingRequired = false;
       const finDataSource = libraryItems.map((module: any, moduleIndex: number) => {
+        const moduleDuration = (module.activities || []).reduce((sum: number, activity: any) => {
+          const value = Number(activity.duration);
+          return Number.isFinite(value) ? sum + value : sum;
+        }, 0);
+        const moduleActualDuration = (module.activities || []).reduce((sum: number, activity: any) => {
+          const value = Number(activity.actualDuration);
+          return Number.isFinite(value) ? sum + value : sum;
+        }, 0);
         const children = (module.activities || []).map((activity: any, actIndex: number) => {
           if (activity.activityStatus == "completed" || activity.activityStatus == "inProgress") {
             editingRequired = true;
@@ -651,6 +671,7 @@ export const StatusUpdate = () => {
             sundayWorking: activity.sundayWorking ?? module?.sundayWorking ?? false,
             notes: activity.notes || [],
             raci: activity.raci || {},
+            controllabilityFactor: activity.controllabilityFactor || null,
             cost: activity.cost || {},
             documents: activity.documents || {},
             activityDocuments: activity?.activityDocuments || {},
@@ -666,6 +687,8 @@ export const StatusUpdate = () => {
           SrNo: module.parentModuleCode,
           Code: module.parentModuleCode,
           keyActivity: module.moduleName,
+          duration: moduleDuration,
+          actualDuration: moduleActualDuration,
           isModule: true,
           children,
         };
@@ -959,12 +982,29 @@ export const StatusUpdate = () => {
       },
     },
     {
+      title: "Risk Factor",
+      dataIndex: "controllabilityFactor",
+      key: "controllabilityFactor",
+      width: 140,
+      align: "center",
+      render: (value: string | null, record: any) => {
+        if (record?.isModule) return "-";
+        if (!value) return <Tag>Not Set</Tag>;
+        const colorMap: Record<string, string> = {
+          High: "red",
+          Medium: "orange",
+          Low: "green",
+        };
+        return <Tag color={colorMap[value] || "default"}>{value}</Tag>;
+      },
+    },
+    {
       title: "Duration",
       dataIndex: "duration",
       key: "duration",
       width: 80,
       align: "center",
-      render: (_, record) => `${record.duration ? record.duration : ''}`
+      render: (_, record) => `${record.duration ?? ''}`
     },
     { title: "Pre-Requisite", dataIndex: "preRequisite", key: "preRequisite", width: 120, align: "center" },
     { title: "Slack", dataIndex: "slack", key: "slack", width: 80, align: "center" },
@@ -980,6 +1020,24 @@ export const StatusUpdate = () => {
       align: "center",
       render: (_, record) => {
         const { actualStart, actualFinish, expectedDuration, duration, activityStatus, isModule } = record;
+
+        if (isModule) {
+          const moduleDurationTotal = (record.children || []).reduce((sum: number, child: any) => {
+            const childStart = child.actualStart && dayjs(child.actualStart, 'DD-MM-YYYY').isValid()
+              ? dayjs(child.actualStart, 'DD-MM-YYYY')
+              : null;
+            const childFinish = child.actualFinish && dayjs(child.actualFinish, 'DD-MM-YYYY').isValid()
+              ? dayjs(child.actualFinish, 'DD-MM-YYYY')
+              : null;
+            const childCalculated = childStart && childFinish
+              ? getWorkingDaysDiff(childStart, childFinish, child)
+              : null;
+            const childDisplay = child.expectedDuration ?? childCalculated ?? child.actualDuration ?? child.duration;
+            const numericValue = Number(childDisplay);
+            return Number.isFinite(numericValue) ? sum + numericValue : sum;
+          }, 0);
+          return `${moduleDurationTotal}`;
+        }
 
         const start = actualStart && dayjs(actualStart, 'DD-MM-YYYY').isValid()
           ? dayjs(actualStart, 'DD-MM-YYYY')
@@ -1943,9 +2001,18 @@ export const StatusUpdate = () => {
     setOpenResponsibilityModal(true);
   };
 
+  const handleOpenControllabilityModal = () => {
+    setOpenControllabilityModal(true);
+  };
+
   const handleCloseResponsibility = () => {
     setOpenResponsibilityModal(false);
     raciForm.resetFields();
+  };
+
+  const handleCloseControllability = () => {
+    setOpenControllabilityModal(false);
+    controllabilityForm.resetFields();
   };
 
   const handleOpenStandardizeModal = () => {
@@ -2238,6 +2305,60 @@ export const StatusUpdate = () => {
       notify.success("Responsibilities updated successfully!");
     } catch (error) {
       console.error("Validation Failed:", error);
+    }
+  };
+
+  const handleConfirmControllability = async () => {
+    try {
+      const values = await controllabilityForm.validateFields();
+      const selectedFactor = String(values.controllabilityFactor || "").trim();
+
+      const updatedDataSource = (prev: any[]): any[] =>
+        prev.map((item) => {
+          if (item.key == selectedActivityKey) {
+            return { ...item, controllabilityFactor: selectedFactor };
+          }
+          if (item.children) return { ...item, children: updatedDataSource(item.children) };
+          return item;
+        });
+
+      const newDataSource = updatedDataSource(dataSource);
+      setDataSource(newDataSource);
+
+      const updatedFactorMap = new Map<string, string>();
+      newDataSource.forEach((module: any) => {
+        module.children.forEach((activity: any) => {
+          if (activity.controllabilityFactor) {
+            updatedFactorMap.set(activity.Code, activity.controllabilityFactor);
+          }
+        });
+      });
+
+      const updatedSequencedModules = sequencedModules.map((module: any) => ({
+        ...module,
+        activities: module.activities.map((activity: any) => ({
+          ...activity,
+          ...(updatedFactorMap.has(activity.code)
+            ? { controllabilityFactor: updatedFactorMap.get(activity.code) }
+            : {}),
+        })),
+      }));
+
+      setSequencedModules(updatedSequencedModules);
+      await db.updateProjectTimeline(
+        selectedProjectTimeline.versionId || selectedProjectTimeline.timelineId,
+        updatedSequencedModules
+      );
+
+      const updatedActivity = findActivityByKey(newDataSource, selectedActivityKey);
+      if (activityDetailsVisible && selectedActivity?.key == selectedActivityKey && updatedActivity) {
+        setSelectedActivity(updatedActivity);
+      }
+
+      notify.success("Controllability factor updated successfully!");
+      handleCloseControllability();
+    } catch (error) {
+      console.error("Controllability factor validation failed:", error);
     }
   };
 
@@ -3159,6 +3280,28 @@ export const StatusUpdate = () => {
                   {!isReplannedTimeline && (
                     withDisabledHint(
                       <Button
+                        icon={
+                          <span className="status-custom-action-icon" aria-hidden>
+                            <img src={riskFactorActionIcon} alt="" />
+                          </span>
+                        }
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          handleOpenControllabilityModal();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-controllability"
+                      >
+                        Controllability
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then set controllability factor."
+                    )
+                  )}
+
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
                         icon={<EditOutlined />}
                         disabled={!selectedActivityKey}
                         onClick={() => {
@@ -3782,6 +3925,39 @@ export const StatusUpdate = () => {
                 </Form.Item>
               </Col>
             </Row>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Set Controllability Factor"
+        open={openControllabilityModal}
+        onCancel={handleCloseControllability}
+        onOk={handleConfirmControllability}
+        destroyOnClose
+        className="modal-container"
+        maskClosable={false}
+        keyboard={false}
+      >
+        <Form
+          form={controllabilityForm}
+          layout="vertical"
+          preserve={false}
+          style={{ padding: "0px 10px" }}
+        >
+          <Form.Item
+            label="Risk Factor"
+            name="controllabilityFactor"
+            rules={[{ required: true, message: "Please select risk factor" }]}
+          >
+            <Select
+              placeholder="Select risk factor"
+              options={[
+                { label: "High", value: "High" },
+                { label: "Medium", value: "Medium" },
+                { label: "Low", value: "Low" },
+              ]}
+            />
           </Form.Item>
         </Form>
       </Modal>

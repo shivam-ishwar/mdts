@@ -25,6 +25,7 @@ interface Activity {
     start: string | null;
     end: string | null
     activityStatus: string | null;
+    controllabilityFactor?: string | null;
     actualStart?: string | null;
     actualFinish?: string | null;
     actualDuration?: number;
@@ -376,6 +377,14 @@ const ProjectTimeline = (project: any) => {
             setSequencedModules(libraryItems);
             let editingRequired = false;
             const finDataSource = libraryItems.map((module: any, moduleIndex: number) => {
+                const moduleDuration = (module.activities || []).reduce((sum: number, activity: any) => {
+                    const value = Number(activity.duration);
+                    return Number.isFinite(value) ? sum + value : sum;
+                }, 0);
+                const moduleActualDuration = (module.activities || []).reduce((sum: number, activity: any) => {
+                    const value = Number(activity.actualDuration);
+                    return Number.isFinite(value) ? sum + value : sum;
+                }, 0);
                 const children = (module.activities || []).map((activity: any, actIndex: number) => {
                     if (activity.activityStatus === "completed" || activity.activityStatus === "inProgress") {
                         editingRequired = true;
@@ -399,6 +408,7 @@ const ProjectTimeline = (project: any) => {
                         remarks: activity.remarks ?? "",
                         isModule: false,
                         activityStatus: activity.activityStatus || "yetToStart",
+                        controllabilityFactor: activity.controllabilityFactor || null,
                         fin_status: activity.fin_status || '',
                         notes: activity.notes || [],
                         raci: activity.raci || {},
@@ -411,6 +421,8 @@ const ProjectTimeline = (project: any) => {
                     SrNo: module.parentModuleCode,
                     Code: module.parentModuleCode,
                     keyActivity: module.moduleName,
+                    duration: moduleDuration,
+                    actualDuration: moduleActualDuration,
                     isModule: true,
                     children,
                 };
@@ -503,12 +515,29 @@ const ProjectTimeline = (project: any) => {
             },
         },
         {
+            title: "Risk Factor",
+            dataIndex: "controllabilityFactor",
+            key: "controllabilityFactor",
+            width: 150,
+            align: "center",
+            render: (value, record) => {
+                if (record?.isModule) return "-";
+                if (!value) return <Tag>Not Set</Tag>;
+                const colorMap: Record<string, string> = {
+                    High: "red",
+                    Medium: "orange",
+                    Low: "green",
+                };
+                return <Tag color={colorMap[String(value)] || "default"}>{String(value)}</Tag>;
+            }
+        },
+        {
             title: "Duration",
             dataIndex: "duration",
             key: "duration",
             width: 100,
             align: "center",
-            render: (_, record) => `${record.duration ? record.duration : ''}`
+            render: (_, record) => `${record.duration ?? ''}`
         },
         { title: "Pre-Requisite", dataIndex: "preRequisite", key: "preRequisite", width: 220, align: "center" },
         { title: "Slack", dataIndex: "slack", key: "slack", width: 180, align: "center" },
@@ -551,6 +580,21 @@ const ProjectTimeline = (project: any) => {
             width: 250,
             align: "center",
             render: (_, record) => {
+                if (record?.isModule) {
+                    const moduleDurationTotal = (record.children || []).reduce((sum: number, child: any) => {
+                        const childStart = child.actualStart && dayjs(child.actualStart, 'DD-MM-YYYY').isValid()
+                            ? dayjs(child.actualStart, 'DD-MM-YYYY')
+                            : null;
+                        const childFinish = child.actualFinish && dayjs(child.actualFinish, 'DD-MM-YYYY').isValid()
+                            ? dayjs(child.actualFinish, 'DD-MM-YYYY')
+                            : null;
+                        const childCalculated = childStart && childFinish ? getWorkingDaysDiff(childStart, childFinish) : null;
+                        const childDisplay = child.expectedDuration ?? childCalculated ?? child.actualDuration ?? child.duration;
+                        const numericValue = Number(childDisplay);
+                        return Number.isFinite(numericValue) ? sum + numericValue : sum;
+                    }, 0);
+                    return `${moduleDurationTotal} days`;
+                }
                 const { actualStart, actualFinish, duration } = record;
 
                 const start = actualStart && dayjs(actualStart, 'DD-MM-YYYY').isValid()

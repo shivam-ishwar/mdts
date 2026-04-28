@@ -28,6 +28,7 @@ interface Activity {
   start?: string | null;
   end?: string | null;
   activityStatus?: string;
+  controllabilityFactor?: string | null;
   actualStart?: string;
   actualFinish?: string;
   fin_status?: string;
@@ -631,10 +632,11 @@ const TimeBuilder = () => {
       .flatMap((module: any) => module.activities || [])
       .find((activity: any) => activity.code == code);
     const activityDuration = parseInt(targetActivity?.duration, 10) || 0;
-    const isEmptySlack = newSlack === "";
-    const requestedSlack = parseInt(newSlack, 10) || 0;
+    const isIncompleteNegative = newSlack === "-";
+    const isEmptySlack = newSlack === "" || isIncompleteNegative;
+    const requestedSlack = isIncompleteNegative ? 0 : (parseInt(newSlack, 10) || 0);
     const normalizedSlack = isEmptySlack
-      ? ""
+      ? (isIncompleteNegative ? "-" : "")
       : String(Math.min(requestedSlack, activityDuration));
 
     if (!isEmptySlack && requestedSlack > activityDuration) {
@@ -647,6 +649,9 @@ const TimeBuilder = () => {
 
         if (activity.code == code) {
           activity.slack = normalizedSlack;
+          if (normalizedSlack === "-") {
+            return activity;
+          }
 
           const prerequisiteCodes = getPrerequisiteCodes(activity);
           const preEnd = prerequisiteCodes.length
@@ -684,6 +689,15 @@ const TimeBuilder = () => {
 
     setFinalData(updatedFinalData);
     setSequencedModules(updatedSequencedModules);
+  };
+
+  const normalizeSlackInput = (rawValue: string): string => {
+    if (!rawValue) return "";
+    const trimmed = rawValue.trim();
+    const isNegative = trimmed.startsWith("-");
+    const digits = trimmed.replace(/\D/g, "");
+    if (!digits) return isNegative ? "-" : "";
+    return `${isNegative ? "-" : ""}${digits}`;
   };
 
   const updateDependentActivities = (prerequisiteCode: any, prerequisiteEndDate: any) => {
@@ -1335,6 +1349,25 @@ const TimeBuilder = () => {
         ),
       },
       {
+        title: "Risk Factor",
+        dataIndex: "controllabilityFactor",
+        key: "controllabilityFactor",
+        align: "center",
+        render: (value: string, record: any) => {
+          if (!value) return <span style={{ color: "#8c8c8c" }}>Not Set</span>;
+          const colorMap: Record<string, string> = {
+            High: "#cf1322",
+            Medium: "#d46b08",
+            Low: "#389e0d",
+          };
+          return (
+            <span style={{ fontWeight: 700, color: colorMap[String(value)] || "#595959" }}>
+              {String(value)}
+            </span>
+          );
+        },
+      },
+      {
         title: "Duration",
         dataIndex: "duration",
         key: "duration",
@@ -1504,12 +1537,13 @@ const TimeBuilder = () => {
                 type="text"
                 value={record.slack ?? "0"}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "");
+                  const value = normalizeSlackInput(e.target.value);
                   handleSlackChange(record.code, value);
                 }}
                 onKeyDown={(e) => {
                   if (
                     !/^\d$/.test(e.key) &&
+                    e.key !== "-" &&
                     e.key !== "Backspace" &&
                     e.key !== "Delete" &&
                     e.key !== "ArrowLeft" &&
@@ -1638,7 +1672,26 @@ const TimeBuilder = () => {
         dataIndex: "duration",
         key: "duration",
         align: "center",
-        render: (duration: any) => (duration ? duration : ""),
+        render: (_duration: any, record: any) => {
+          const totalDuration = (record.activities || []).reduce((sum: number, activity: any) => {
+            const value = Number(activity.duration);
+            return Number.isFinite(value) ? sum + value : sum;
+          }, 0);
+          return `${totalDuration}`;
+        },
+      },
+      {
+        title: "Actual Duration",
+        dataIndex: "actualDuration",
+        key: "actualDuration",
+        align: "center",
+        render: (_actualDuration: any, record: any) => {
+          const totalActualDuration = (record.activities || []).reduce((sum: number, activity: any) => {
+            const value = Number(activity.actualDuration);
+            return Number.isFinite(value) ? sum + value : sum;
+          }, 0);
+          return `${totalActualDuration}`;
+        },
       },
     ];
 
