@@ -165,7 +165,8 @@ const ProjectsList = () => {
         render: (_: any, record: ProjectData) => {
           const hasTimeline = record.projectTimeline && record.projectTimeline.length > 0;
           const isOwner = record.userGuiId === currentUser?.guiId;
-          const canModify = isOwner && !hasTimeline;
+          const canEdit = isOwner;
+          const canDelete = isOwner && !hasTimeline;
 
           return (
             <div className="pl-actions">
@@ -174,14 +175,14 @@ const ProjectsList = () => {
                   !isOwner
                     ? "You are not the owner of this project"
                     : hasTimeline
-                    ? "Timeline created - editing not allowed"
+                    ? "Timeline created - only project name is locked"
                     : "Edit project"
                 }
               >
                 <Button
                   icon={<EditOutlined />}
                   onClick={() => navigate(`/update-project/${record.id}`)}
-                  disabled={!canModify}
+                  disabled={!canEdit}
                   className="pl-icon-btn"
                 />
               </Tooltip>
@@ -199,7 +200,7 @@ const ProjectsList = () => {
                   icon={<DeleteOutlined />}
                   danger
                   onClick={() => showDeleteModal(record)}
-                  disabled={!canModify}
+                  disabled={!canDelete}
                   className="pl-icon-btn"
                 />
               </Tooltip>

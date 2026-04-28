@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "../styles/delay-cost.css";
 import { ColumnsType } from "antd/es/table";
 import { Table } from "antd";
+import { formatPrerequisiteCodes, getPrerequisiteCodes } from "../Utils/prerequisites";
 
 const DelayCostCalculator = () => {
   const [expandedKeys, setExpandedKeys] = useState<React.Key[]>([]);
@@ -351,8 +352,9 @@ const DelayCostCalculator = () => {
 
     const allRoots: any[] = [];
     augmentedActivities.forEach(activity => {
-      if (activity.prerequisite && activityMap.has(activity.prerequisite)) {
-        activityMap.get(activity.prerequisite)!.children.push(activity);
+      const prerequisiteCode = getPrerequisiteCodes(activity)[0];
+      if (prerequisiteCode && activityMap.has(prerequisiteCode)) {
+        activityMap.get(prerequisiteCode)!.children.push(activity);
       } else {
         allRoots.push(activity);
       }
@@ -389,7 +391,7 @@ const DelayCostCalculator = () => {
       key: a.code,
       Code: a.code,
       keyActivity: a.activityName,
-      preRequisite: a.prerequisite ?? '-',
+      preRequisite: formatPrerequisiteCodes(a) || '-',
       plannedStart: a.start,
       plannedFinish: a.end,
       actualStart: a.actualStart,

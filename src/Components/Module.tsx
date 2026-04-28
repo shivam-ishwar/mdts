@@ -4,7 +4,7 @@ import { useLocation } from "react-router-dom";
 import { Paper, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
 import { useNavigate } from 'react-router-dom';
 import "../styles/module.css"
-import { Input, Button, Tooltip, Row, Col, Typography, Modal, Select, AutoComplete, Radio, Form, Switch } from 'antd';
+import { Input, Button, Tooltip, Row, Col, Typography, Modal, Select, Radio, Form, Switch } from 'antd';
 import { SearchOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, UserOutlined, BellOutlined, PlusOutlined, CloseCircleOutlined, ExclamationCircleOutlined, DollarOutlined, MinusCircleOutlined, FileTextOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import CreateNotification from "./CreateNotification.tsx";
 import UserRolesPage from "./AssignRACI";
@@ -17,6 +17,7 @@ import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { ToastContainer } from "react-toastify";
 import { hasPermission } from "../Utils/auth.ts";
+import { formatPrerequisiteCodes, getPrerequisiteCodes, setActivityPrerequisites } from "../Utils/prerequisites";
 const Module = () => {
     const { state } = useLocation();
     const navigate = useNavigate();
@@ -56,7 +57,9 @@ const Module = () => {
         level: "",
         mineType: mineType,
         duration: '',
-        activities: regenerateCodes(parentModuleCode, state?.activities || [])
+        activities: regenerateCodes(parentModuleCode, state?.activities || []).map((activity: any) =>
+            setActivityPrerequisites(activity, activity, { manual: true })
+        )
     });
     let isEditing = !!state;
     const [moduleType, setModuleType] = useState("PERSONAL");
@@ -111,7 +114,9 @@ const Module = () => {
                 level: state.level,
                 mineType: state.mineType,
                 duration: state.duration,
-                activities: regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || [])
+                activities: regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || []).map((activity: any) =>
+                    setActivityPrerequisites(activity, activity, { manual: true })
+                )
             });
             setUndoStack([]);
             if (originalActivities.length === 0) {
@@ -285,31 +290,29 @@ const Module = () => {
     const isModuleRow = (row: any) =>
         !!row?.parentModuleCode && !row?.code;
 
-const applyPrerequisites = (activities: any[]) => {
-    const byId = new Map<string, any>();
-    const lastByParent = new Map<string | null, any>();
+const applyPrerequisites = (activities: any[]) =>
+    activities.map((activity: any, index: number) => {
+        if (activity?.prerequisiteTouched) {
+            return setActivityPrerequisites(activity, activity);
+        }
 
-    activities.forEach((activity: any) => {
-        const id = getActivityId(activity);
-        if (id) byId.set(id, activity);
+        const previousSibling = [...activities]
+            .slice(0, index)
+            .reverse()
+            .find((candidate: any) => (candidate?.parentId ?? null) === (activity?.parentId ?? null));
+
+        const parentActivity = activity?.parentId
+            ? activities.find((candidate: any) => getActivityId(candidate) === activity.parentId)
+            : null;
+
+        const defaultPrerequisites = previousSibling?.code
+            ? [previousSibling.code]
+            : parentActivity?.code
+                ? [parentActivity.code]
+                : [];
+
+        return setActivityPrerequisites(activity, defaultPrerequisites);
     });
-
-    return activities.map((activity: any) => {
-        const pid = activity.parentId ?? null;
-        const previousSibling = lastByParent.get(pid) ?? null;
-        const parentCode = pid ? byId.get(pid)?.code ?? null : null;
-        const prerequisiteCode = previousSibling?.code ?? parentCode ?? null;
-
-        const updated = {
-            ...activity,
-            prerequisite: prerequisiteCode,
-            prerequisite_activity_code: prerequisiteCode,
-        };
-
-        lastByParent.set(pid, updated);
-        return updated;
-    });
-};
 
 const setActivitiesWithRecalc = (activities: any[]) => {
     const nextActivities = regenerateCodes(moduleData.parentModuleCode, activities || []);
@@ -706,16 +709,14 @@ const setActivitiesWithRecalc = (activities: any[]) => {
     };
 
     const handlePrerequisiteChange = (activityCode: any, value: any) => {
-        const byCode = new Map(moduleData.activities.map((a: any) => [a.code, a]));
-        const parent = byCode.get(value);
         const updatedActivities = moduleData.activities.map((activity: any) =>
-            activity.code === activityCode ? { ...activity, parentId: parent ? getActivityId(parent) : null } : activity
+            activity.code === activityCode ? setActivityPrerequisites(activity, value, { manual: true }) : activity
         );
         setActivitiesWithRecalc(updatedActivities);
     };
 
     const filterPrerequisites = (inputValue: string, option: any) => {
-        return option.value.toUpperCase().indexOf(inputValue.toUpperCase()) !== -1;
+        return String(option?.label ?? option?.value ?? "").toUpperCase().indexOf(inputValue.toUpperCase()) !== -1;
     };
 
     const handleCancelUpdateModule = () => {
@@ -746,7 +747,9 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             level: "",
             mineType: mineType,
             duration: '',
-            activities: regenerateCodes(parentModuleCode, state?.activities || [])
+            activities: regenerateCodes(parentModuleCode, state?.activities || []).map((activity: any) =>
+                setActivityPrerequisites(activity, activity, { manual: true })
+            )
         })
     }
 
@@ -1089,23 +1092,22 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             const activityName = String(a?.activityName ?? a?.name ?? a?.title ?? "").trim() || `Activity ${idx + 1}`;
             const duration = Number(a?.duration ?? a?.durationDays ?? 1) || 1;
             const level = String(a?.level ?? "L2");
-            const prerequisite = String(a?.prerequisite ?? a?.prerequisites ?? "").trim();
+            const prerequisites = getPrerequisiteCodes(a?.prerequisites ?? a?.prerequisite);
             const budget = normalizeBudget(a?.cost ?? a?.budget);
             const documents = normalizeDocuments(a?.documents ?? a?.docs ?? a?.requiredDocuments);
             const notifications = normalizeNotifications(a?.notifications ?? a?.notification ?? a?.alerts);
 
-            return {
+            return setActivityPrerequisites({
                 code: code || `${parentCodeVal || "MD"}/${(idx + 1) * 10}`,
                 activityName,
                 duration,
                 level: level.startsWith("L") ? level : `L${level}`,
-                prerequisite,
                 guicode: a?.guicode ?? uuidv4(),
                 // RACI is intentionally excluded from import (set manually after import).
                 notifications,
                 documents,
                 cost: budget
-            };
+            }, prerequisites, { manual: true });
         });
 
         return {
@@ -1481,7 +1483,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                             {moduleData.duration}
                                         </TableCell>
                                         <TableCell sx={{ padding: '10px', color: '#808080' }}>
-                                            {moduleData.prerequisite || ''}
+                                            {formatPrerequisiteCodes(moduleData)}
                                         </TableCell>
 
                                         <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{moduleData.level}</TableCell>
@@ -1516,17 +1518,17 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                     {activity.duration}
                                                 </TableCell>
                                                 <TableCell sx={{ padding: '10px' }}>
-                                                    <AutoComplete
-                                                        value={activity.prerequisite || ""}
+                                                    <Select
+                                                        mode="multiple"
+                                                        value={getPrerequisiteCodes(activity)}
                                                         options={getAllPrerequisites()
                                                             .filter((code: any) => code !== activity.code)
-                                                            .map((code: string) => ({ value: code }))}
+                                                            .map((code: string) => ({ value: code, label: code }))}
                                                         onChange={(value) => handlePrerequisiteChange(activity.code, value)}
                                                         filterOption={filterPrerequisites}
-                                                        placeholder="Select Prerequisite"
+                                                        placeholder="Select prerequisite(s)"
                                                         style={{ width: '100%' }}
                                                         allowClear
-                                                        disabled={!activity.parentId}
                                                     />
                                                 </TableCell>
 

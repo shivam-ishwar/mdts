@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "../styles/status-update.css";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { FolderOpenOutlined, SaveOutlined } from "@mui/icons-material";
+import { AppsRounded, FolderOpenOutlined, SaveOutlined } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { Button, Select, Modal, Input, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin } from "antd";
+import { Button, Select, Modal, Input, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover } from "antd";
 import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
@@ -109,6 +109,7 @@ export const StatusUpdate = () => {
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [activityCost, setActivityCost] = useState<ActivityCost | null>(null);
   const [costLoading, setCostLoading] = useState(false);
+  const [isActionsPopoverOpen, setIsActionsPopoverOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [activityDetailsVisible, setActivityDetailsVisible] = useState(false);
   const [standardizationGroupRecords, setStandardizationGroupRecords] = useState<any[]>([]);
@@ -279,6 +280,11 @@ export const StatusUpdate = () => {
   };
 
   const handleOpenCostCalcModal = () => setOpenCostCalcModal(true);
+  const withDisabledHint = (button: ReactNode, disabled: boolean, message: string) => (
+    <Tooltip title={disabled ? message : undefined}>
+      <span className="status-actions-disabled-wrap">{button}</span>
+    </Tooltip>
+  );
 
   const handleCancel = () => {
     setIsModalOpen(false);
@@ -3068,139 +3074,240 @@ export const StatusUpdate = () => {
 
         {selectedProject?.projectTimeline != null && (
           <div className="actions">
-            {!isReplannedTimeline && (
-              <Button
-                icon={<FileTextOutlined />}
-                disabled={!selectedActivityKey}
-                onClick={() => handleOpenDocumentsModal(selectedActivityKey)}
-                className="project-timeline-btn project-timeline-btn-docs"
-              >
-                Documents
-              </Button>
-            )}
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              overlayClassName="status-actions-popover"
+              open={isActionsPopoverOpen}
+              onOpenChange={setIsActionsPopoverOpen}
+              content={
+                <div className="status-actions-panel">
+                  <div className="status-actions-title">Quick Actions</div>
+                  <div className="status-actions-grid">
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<FileTextOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          handleOpenDocumentsModal(selectedActivityKey);
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-docs"
+                      >
+                        Documents
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then open Documents."
+                    )
+                  )}
 
-            {!isReplannedTimeline && (
-              <Button
-                icon={<DollarOutlined />}
-                disabled={!selectedActivityKey}
-                onClick={handleOpenCostCalcModal}
-                className="project-timeline-btn project-timeline-btn-cost"
-              >
-                Cost
-              </Button>
-            )}
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<DollarOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          handleOpenCostCalcModal();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-cost"
+                      >
+                        Cost
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then open Cost details."
+                    )
+                  )}
 
-            {!isReplannedTimeline && (
-              <Button
-                icon={<UserOutlined />}
-                disabled={!selectedActivityKey}
-                onClick={showResponsibilityModal}
-                className="project-timeline-btn project-timeline-btn-raci"
-              >
-                RACI
-              </Button>
-            )}
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<UserOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          showResponsibilityModal();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-raci"
+                      >
+                        RACI
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then manage RACI."
+                    )
+                  )}
 
-            {!isReplannedTimeline && (
-              <Button
-                icon={<FormOutlined />}
-                disabled={!selectedActivityKey}
-                onClick={() => setNoteModalVisible(true)}
-                className="project-timeline-btn project-timeline-btn-note"
-              >
-                Note
-              </Button>
-            )}
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<FormOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          setNoteModalVisible(true);
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-note"
+                      >
+                        Note
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then add or edit Note."
+                    )
+                  )}
 
-            {!isReplannedTimeline && (
-              <Button
-                icon={<EditOutlined />}
-                disabled={!selectedActivityKey}
-                onClick={handleOpenStandardizeModal}
-                className="project-timeline-btn project-timeline-btn-standardize"
-              >
-                Standerize
-              </Button>
-            )}
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<EditOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={() => {
+                          handleOpenStandardizeModal();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-standardize"
+                      >
+                        Standerize
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then Standardize it."
+                    )
+                  )}
 
-            {!replaneMode && (
-              <Button
-                type="primary"
-                disabled={!selectedProjectId}
-                icon={<DownloadOutlined />}
-                onClick={handleDownload}
-                className="project-timeline-btn project-timeline-btn-download"
-              >
-                Download
-              </Button>
-            )}
+                  {!replaneMode && (
+                    withDisabledHint(
+                      <Button
+                        type="primary"
+                        disabled={!selectedProjectId}
+                        icon={<DownloadOutlined />}
+                        onClick={() => {
+                          handleDownload();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-download"
+                      >
+                        Download
+                      </Button>,
+                      !selectedProjectId,
+                      "Choose a project first, then Download the timeline report."
+                    )
+                  )}
 
-            {!isReplannedTimeline &&
-              !replaneMode &&
-              ((selectedProjectTimeline?.revisedByLog?.newUserId == getCurrentUser()?.id ||
-                (getCurrentUser()?.guiId && selectedProjectTimeline?.status !== "Pending")) ||
-                (!selectedProjectTimeline?.revisedByLog?.newUserId &&
-                  selectedProjectTimeline?.userGuiId == getCurrentUser()?.guiId)) && (
-                <Button
-                  type="primary"
-                  disabled={!selectedProjectId}
-                  icon={selectedProjectTimeline?.status !== "Approved" ? <EditOutlined /> : <ReloadOutlined />}
-                  onClick={selectedProjectTimeline?.status !== "Approved" ? editTimeBuilder : rePlanTimeline}
-                  className="project-timeline-btn project-timeline-btn-edit"
-                >
-                  {selectedProjectTimeline?.status !== "Approved" ? "Edit" : "Replan"}
-                </Button>
-              )}
+                  {!isReplannedTimeline &&
+                    !replaneMode &&
+                    ((selectedProjectTimeline?.revisedByLog?.newUserId == getCurrentUser()?.id ||
+                      (getCurrentUser()?.guiId && selectedProjectTimeline?.status !== "Pending")) ||
+                      (!selectedProjectTimeline?.revisedByLog?.newUserId &&
+                        selectedProjectTimeline?.userGuiId == getCurrentUser()?.guiId)) &&
+                    withDisabledHint(
+                      <Button
+                        type="primary"
+                        disabled={!selectedProjectId}
+                        icon={selectedProjectTimeline?.status !== "Approved" ? <EditOutlined /> : <ReloadOutlined />}
+                        onClick={() => {
+                          if (selectedProjectTimeline?.status !== "Approved") {
+                            editTimeBuilder();
+                          } else {
+                            rePlanTimeline();
+                          }
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-edit"
+                      >
+                        {selectedProjectTimeline?.status !== "Approved" ? "Edit" : "Replan"}
+                      </Button>,
+                      !selectedProjectId,
+                      "Choose a project first, then use Edit or Replan."
+                    )}
 
-            {!replaneMode && (
-              <Button
-                type="primary"
-                disabled={!selectedProjectId}
-                icon={<ShareAltOutlined />}
-                onClick={showModal}
-                className="project-timeline-btn project-timeline-btn-share"
-              >
-                Share
-              </Button>
-            )}
+                  {!replaneMode && (
+                    withDisabledHint(
+                      <Button
+                        type="primary"
+                        disabled={!selectedProjectId}
+                        icon={<ShareAltOutlined />}
+                        onClick={() => {
+                          showModal();
+                          setIsActionsPopoverOpen(false);
+                        }}
+                        className="project-timeline-btn project-timeline-btn-share"
+                      >
+                        Share
+                      </Button>,
+                      !selectedProjectId,
+                      "Choose a project first, then Share timeline details."
+                    )
+                  )}
 
-            {selectedProjectTimeline?.status == "Approved" && (
-              <Button
-                type={isStatusUpdateMode ? "primary" : "default"}
-                icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
-                onClick={isStatusUpdateMode ? handleSaveStatus : handleUpdateStatus}
-                className={
-                  isStatusUpdateMode
-                    ? "project-timeline-btn project-timeline-btn-status-save"
-                    : "project-timeline-btn project-timeline-btn-status-update"
-                }
-              >
-                {isStatusUpdateMode ? "Save Status" : "Update Status"}
-              </Button>
-            )}
+                  {selectedProjectTimeline?.status == "Approved" && (
+                    <Button
+                      type={isStatusUpdateMode ? "primary" : "default"}
+                      icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
+                      onClick={() => {
+                        if (isStatusUpdateMode) {
+                          handleSaveStatus();
+                        } else {
+                          handleUpdateStatus();
+                        }
+                        setIsActionsPopoverOpen(false);
+                      }}
+                      className={
+                        isStatusUpdateMode
+                          ? "project-timeline-btn project-timeline-btn-status-save"
+                          : "project-timeline-btn project-timeline-btn-status-update"
+                      }
+                    >
+                      {isStatusUpdateMode ? "Save Status" : "Update Status"}
+                    </Button>
+                  )}
 
-            {selectedProjectTimeline?.status !== "Revised" &&
-              selectedProjectTimeline?.status != "Approved" &&
-              selectedProjectTimeline?.status != "replanned" && (
-                <div className="action-btn">
-                  <Button
-                    type="primary"
-                    disabled={!selectedProjectId}
-                    onClick={() => setIsReviseModalOpen(true)}
-                    className="project-timeline-btn project-timeline-btn-revise"
-                  >
-                    Revise
-                  </Button>
-                  <Button
-                    type="primary"
-                    disabled={!selectedProjectId}
-                    onClick={() => setIsApproveModalOpen(true)}
-                    className="project-timeline-btn project-timeline-btn-approve"
-                  >
-                    Approve
-                  </Button>
+                  {selectedProjectTimeline?.status !== "Revised" &&
+                    selectedProjectTimeline?.status != "Approved" &&
+                    selectedProjectTimeline?.status != "replanned" && (
+                      <>
+                        {withDisabledHint(
+                          <Button
+                            type="primary"
+                            disabled={!selectedProjectId}
+                            onClick={() => {
+                              setIsReviseModalOpen(true);
+                              setIsActionsPopoverOpen(false);
+                            }}
+                            className="project-timeline-btn project-timeline-btn-revise"
+                          >
+                            Revise
+                          </Button>,
+                          !selectedProjectId,
+                          "Choose a project first, then submit for Revise."
+                        )}
+                        {withDisabledHint(
+                          <Button
+                            type="primary"
+                            disabled={!selectedProjectId}
+                            onClick={() => {
+                              setIsApproveModalOpen(true);
+                              setIsActionsPopoverOpen(false);
+                            }}
+                            className="project-timeline-btn project-timeline-btn-approve"
+                          >
+                            Approve
+                          </Button>,
+                          !selectedProjectId,
+                          "Choose a project first, then Approve the timeline."
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
+              }
+            >
+              <Button
+                type="default"
+                icon={<AppsRounded className="status-actions-trigger-icon" />}
+                className="project-timeline-btn status-actions-trigger"
+                aria-label="Open actions menu"
+              />
+            </Popover>
           </div>
         )}
       </div>

@@ -128,6 +128,7 @@ export const RegisterNewProject: React.FC = () => {
   }, []);
 
   const [isEditMode, setIsEditMode] = useState(false);
+  const isTimelineBuilt = isEditMode && Array.isArray(projectTimeline) && projectTimeline.length > 0;
 
   const loadProjectData = async (projectId: string) => {
     const project = await db.getProjectById(projectId);
@@ -526,6 +527,7 @@ export const RegisterNewProject: React.FC = () => {
                     type="text"
                     value={formData.projectName || ""}
                     placeholder="Enter project name"
+                    disabled={isTimelineBuilt}
                     onChange={(e) => handleChange("projectName", e.target.value)}
                   />
                 </Form.Item>
@@ -624,7 +626,6 @@ export const RegisterNewProject: React.FC = () => {
                       value={formData.typeOfMine ? formData.typeOfMine : undefined}
                       style={{ marginLeft: "4px" }}
                       placeholder="Select type of mine"
-                      disabled={isEditMode && projectTimeline.length > 0}
                       onChange={(value) => {
                         handleChange("typeOfMine", value);
                         const updatedLibraries = allLibrariesName.filter((name: any) => name.mineType === value);

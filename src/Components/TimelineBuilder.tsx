@@ -15,10 +15,13 @@ import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { Box } from "@mui/material";
 import { v4 as uuidv4 } from 'uuid';
+import { formatPrerequisiteCodes, getPrerequisiteCodes, hasPrerequisites, setActivityPrerequisites } from "../Utils/prerequisites";
 interface Activity {
   code: string;
   activityName: string;
-  prerequisite: string;
+  prerequisite?: string;
+  prerequisites?: string[];
+  prerequisite_activity_code?: string | null;
   slack: string;
   level: string;
   duration: string;
@@ -269,7 +272,7 @@ const TimeBuilder = () => {
               Code: activity.code,
               keyActivity: activity.activityName,
               duration: activity.duration ?? "",
-              preRequisite: activity.prerequisite ?? "-",
+              preRequisite: formatPrerequisiteCodes(activity) || "-",
               slack: activity.slack ?? "0",
               plannedStart: activity.start ? dayjs(activity.start).format("DD-MM-YYYY") : "-",
               plannedFinish: activity.end ? dayjs(activity.end).format("DD-MM-YYYY") : "-",
@@ -645,8 +648,9 @@ const TimeBuilder = () => {
         if (activity.code == code) {
           activity.slack = normalizedSlack;
 
-          const preEnd = activity.prerequisite
-            ? getActivityEndDate(activity.prerequisite)
+          const prerequisiteCodes = getPrerequisiteCodes(activity);
+          const preEnd = prerequisiteCodes.length
+            ? getActivityEndDate(prerequisiteCodes)
             : (activity.start || null);
 
           const preEndISO = preEnd ? toISODateOnly(preEnd) : null;
@@ -690,9 +694,10 @@ const TimeBuilder = () => {
 
     function updateActivities(activities: any) {
       return activities.map((activity: any) => {
-        if (activity.prerequisite == prerequisiteCode) {
+        if (getPrerequisiteCodes(activity).includes(prerequisiteCode)) {
           const slack = parseInt(activity.slack, 10) || 0;
-          const { date: startISO, holidays: slackH } = addBusinessDays(prereqEndISO, slack + 1);
+          const latestPrerequisiteEnd = getActivityEndDate(getPrerequisiteCodes(activity)) || prereqEndISO;
+          const { date: startISO, holidays: slackH } = addBusinessDays(toISODateOnly(latestPrerequisiteEnd), slack + 1);
 
           const duration = parseInt(activity.duration, 10) || 0;
           const { date: endISO, holidays: durH } = addBusinessDays(startISO, duration);
@@ -769,11 +774,14 @@ const TimeBuilder = () => {
   };
 
   const getActivityEndDate = (prerequisiteCode: any) => {
-    let endDate = null;
+    const codes = getPrerequisiteCodes(prerequisiteCode);
+    let endDate: string | null = null;
     finalData.forEach((module) => {
       module.activities.forEach((activity) => {
-        if (activity.code == prerequisiteCode) {
-          endDate = activity.end;
+        if (codes.includes(activity.code) && activity.end) {
+          if (!endDate || dayjs(activity.end).isAfter(dayjs(endDate))) {
+            endDate = activity.end;
+          }
         }
       });
     });
@@ -1444,16 +1452,17 @@ const TimeBuilder = () => {
           return (
             <div className={selectClass}>
               <Select
+                mode="multiple"
                 showSearch
-                placeholder="Select Prerequisite"
-                value={record.prerequisite == "-" ? undefined : record.prerequisite}
+                placeholder="Select prerequisite(s)"
+                value={getPrerequisiteCodes(record)}
                 onChange={(value) => {
                   setSequencedModules((prevModules: any) =>
                     prevModules.map((module: any) => ({
                       ...module,
                       activities: module.activities.map((activity: any) =>
                         activity.code == record.code
-                          ? { ...activity, prerequisite: value }
+                          ? setActivityPrerequisites(activity, value, { manual: true })
                           : activity
                       ),
                     }))
@@ -1463,17 +1472,14 @@ const TimeBuilder = () => {
                 filterOption={(input: any, option: any) =>
                   option?.label?.toLowerCase().includes(input.toLowerCase())
                 }
-                options={[
-                  { value: "", label: "-" },
-                  ...sequencedModules.flatMap((module) =>
-                    module.activities
-                      .filter((activity) => activity.activityStatus !== "completed")
-                      .map((activity) => ({
-                        value: activity.code,
-                        label: activity.code,
-                      }))
-                  ),
-                ]}
+                options={sequencedModules.flatMap((module) =>
+                  module.activities
+                    .filter((activity) => activity.activityStatus !== "completed" && activity.code !== record.code)
+                    .map((activity) => ({
+                      value: activity.code,
+                      label: activity.code,
+                    }))
+                )}
                 style={{ width: "95%" }}
                 allowClear
               />
@@ -1526,10 +1532,7 @@ const TimeBuilder = () => {
         key: "start",
         className: step == 5 ? "active-column" : "",
         render: (_: any, record: any) => {
-          const hasPrerequisite =
-            record.prerequisite != null &&
-            String(record.prerequisite).trim() !== "" &&
-            String(record.prerequisite).trim() !== "-";
+          const hasPrerequisite = hasPrerequisites(record);
           const isDisabled =
             step !== 5 || record.activityStatus == "completed" || hasPrerequisite;
           const datePickerClass = step == 5 && !isDisabled ? "highlighted-datepicker" : "";
@@ -1655,7 +1658,7 @@ const TimeBuilder = () => {
         dataIndex: "prerequisite",
         key: "prerequisite",
         align: "center",
-        render: (prerequisite: any) => (prerequisite?.code ? prerequisite.code : ""),
+        render: (_: any, record: any) => formatPrerequisiteCodes(record),
       });
     }
 
@@ -1818,7 +1821,7 @@ const TimeBuilder = () => {
     if (currentStep == 5) {
       return sequencedModules.every((module: any) =>
         module.activities.every((activity: any) => {
-          if (!activity.prerequisite) {
+          if (!hasPrerequisites(activity)) {
             return Boolean(activity.start);
           }
           return true;
@@ -2434,17 +2437,15 @@ const TimeBuilder = () => {
 
   const openAddActivityModal = (moduleCode: string) => {
     setActiveModuleId(moduleCode);
-
     const module: any = sequencedModules.find(
       (m: any) => m.parentModuleCode === moduleCode
     );
     const activities = module?.activities || [];
-
     const lastActivity = activities[activities.length - 1];
 
     addActivityForm.setFieldsValue({
       activity_name: "",
-      prerequisite: lastActivity ? lastActivity.code : undefined,
+      prerequisite: lastActivity?.code ? [lastActivity.code] : [],
     });
 
     setIsAddActivityModalOpen(true);
@@ -2512,10 +2513,9 @@ const TimeBuilder = () => {
         }
       }
 
-      const newActivity: Activity = {
+      const newActivity: Activity = setActivityPrerequisites({
         code: newCode,
         activityName: activity_name,
-        prerequisite: prerequisite || "",
         slack: "0",
         level: "",
         duration: "1",
@@ -2524,7 +2524,7 @@ const TimeBuilder = () => {
         activityStatus: "",
         guicode: uuidv4(),
         holidays: [],
-      };
+      }, prerequisite, { manual: true });
 
       const updatedSequenced = sequencedModules.map((m: any) =>
         m.parentModuleCode === activeModuleId
@@ -3217,7 +3217,8 @@ const TimeBuilder = () => {
 
           <Form.Item label="Prerequisite" name="prerequisite">
             <Select
-              placeholder="Select prerequisite activity"
+              mode="multiple"
+              placeholder="Select prerequisite activity(s)"
               allowClear
             >
               {(() => {
