@@ -71,6 +71,7 @@ export const StatusUpdate = () => {
   const [noteInput, setNoteInput] = useState('');
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [openCostCalcModal, setOpenCostCalcModal] = useState(false);
+  const [isOpportunityCostEnabled, setIsOpportunityCostEnabled] = useState(false);
   const [form] = Form.useForm();
   const [_formValid, setFormValid] = useState(false);
   const [replaneMode, setIsReplanMode] = useState(false);
@@ -197,10 +198,18 @@ export const StatusUpdate = () => {
     if (openCostCalcModal && selectedActivityKey) {
       const activity = findActivityByKey(dataSource, selectedActivityKey);
       if (activity?.cost) {
+        const hasOpportunityCost =
+          activity.cost.opCost !== undefined &&
+          activity.cost.opCost !== null &&
+          activity.cost.opCost !== "";
+        setIsOpportunityCostEnabled(hasOpportunityCost);
         form.setFieldsValue({
           projectCost: activity.cost.projectCost,
-          opCost: activity.cost.opCost
+          opCost: hasOpportunityCost ? activity.cost.opCost : undefined
         });
+      } else {
+        setIsOpportunityCostEnabled(false);
+        form.resetFields();
       }
     }
   }, [openCostCalcModal, selectedActivityKey]);
@@ -1985,12 +1994,14 @@ export const StatusUpdate = () => {
   const handleClose = () => {
     setOpenCostCalcModal(false);
     form.resetFields();
+    setIsOpportunityCostEnabled(false);
     setFormValid(false);
   };
 
   const handleValuesChange = () => {
-    const { projectCost, opCost, delayCost } = form.getFieldsValue();
-    if (projectCost && opCost && delayCost) {
+    const { projectCost, opCost } = form.getFieldsValue();
+    const isOpportunityValid = !isOpportunityCostEnabled || !!opCost;
+    if (projectCost && isOpportunityValid) {
       setFormValid(true);
     } else {
       setFormValid(false);
@@ -2150,15 +2161,25 @@ export const StatusUpdate = () => {
       const values = await form.validateFields();
       const selectedActivityRecord = findActivityByKey(dataSource, selectedActivityKey);
       const selectedActivitySelection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+      const toNumberOrUndefined = (v: any) =>
+        v === undefined || v === null || v === "" ? undefined : Number(v);
+      const selectedProjectCost = toNumberOrUndefined(values.projectCost);
+      const selectedOpportunityCost = isOpportunityCostEnabled
+        ? toNumberOrUndefined(values.opCost)
+        : undefined;
 
       const updatedDataSource = (prev: any[]): any[] =>
         prev.map(item => {
           if (item.key == selectedActivityKey) {
+            const prevCost = item.cost || {};
             return {
               ...item,
               cost: {
-                projectCost: values.projectCost,
-                opCost: values.opCost
+                ...prevCost,
+                ...(selectedProjectCost !== undefined ? { projectCost: selectedProjectCost } : {}),
+                ...(isOpportunityCostEnabled
+                  ? { opCost: selectedOpportunityCost }
+                  : {})
               }
             };
           }
@@ -2211,8 +2232,8 @@ export const StatusUpdate = () => {
             selectedActivityRecord.activityName ||
             ""
           ),
-          projectCost: Number(values.projectCost),
-          opportunityCost: Number(values.opCost),
+          projectCost: selectedProjectCost,
+          opportunityCost: selectedOpportunityCost,
         });
 
         setActivityCost({
@@ -2229,15 +2250,15 @@ export const StatusUpdate = () => {
             selectedActivityRecord.activityName ||
             ""
           ),
-          projectCost: Number(values.projectCost),
-          opportunityCost: Number(values.opCost),
+          projectCost: selectedProjectCost,
+          opportunityCost: selectedOpportunityCost,
           updatedAt: new Date().toISOString(),
         });
       }
 
       form.setFieldsValue({
         projectCost: values.projectCost,
-        opCost: values.opCost,
+        opCost: isOpportunityCostEnabled ? values.opCost : undefined,
       });
       notify.success("Cost updated successfully!");
     } catch (error) {
@@ -3737,7 +3758,7 @@ export const StatusUpdate = () => {
       </Modal>
 
       <Modal
-        title="Define Cost for Delay (₹ / Day)"
+        title="Budgetary Cost"
         open={openCostCalcModal}
         onCancel={handleClose}
         onOk={handleConfirm}
@@ -3758,14 +3779,14 @@ export const StatusUpdate = () => {
             style={{ marginBottom: 16 }}
           >
             <Row align="middle" gutter={8}>
-              <Col flex="150px">Project Cost</Col>
+              <Col flex="150px">Activity Cost</Col>
               <Col flex="auto">
                 <Form.Item
                   name="projectCost"
                   noStyle
-                  rules={[{ required: true, message: 'Please enter Project Cost' }]}
+                  rules={[{ required: true, message: 'Please enter Activity Cost' }]}
                 >
-                  <Input type="number" min={0} placeholder="Enter Project Cost" />
+                  <Input type="number" min={0} placeholder="Enter Activity Cost" />
                 </Form.Item>
               </Col>
             </Row>
@@ -3773,14 +3794,42 @@ export const StatusUpdate = () => {
 
           <Form.Item label="" style={{ marginBottom: 24 }}>
             <Row align="middle" gutter={8}>
-              <Col flex="150px">Opportunity Cost</Col>
+              <Col flex="150px">
+                <Space size={8}>
+                  <span>Opportunity Cost</span>
+                  <Button
+                    size="small"
+                    type={isOpportunityCostEnabled ? "default" : "primary"}
+                    onClick={() => {
+                      if (!isOpportunityCostEnabled) {
+                        setIsOpportunityCostEnabled(true);
+                      } else {
+                        setIsOpportunityCostEnabled(false);
+                        form.setFieldsValue({ opCost: undefined });
+                      }
+                    }}
+                  >
+                    {isOpportunityCostEnabled ? "Disable" : "Enable"}
+                  </Button>
+                </Space>
+              </Col>
               <Col flex="auto">
                 <Form.Item
                   name="opCost"
                   noStyle
-                  rules={[{ required: true, message: 'Please enter OP Cost' }]}
+                  rules={[
+                    {
+                      required: isOpportunityCostEnabled,
+                      message: "Please enter Opportunity Cost",
+                    },
+                  ]}
                 >
-                  <Input type="number" min={0} placeholder="Enter OP Cost" />
+                  <Input
+                    type="number"
+                    min={0}
+                    disabled={!isOpportunityCostEnabled}
+                    placeholder="Enter Opportunity Cost"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -3805,7 +3854,7 @@ export const StatusUpdate = () => {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", rowGap: 8 }}>
-              <div style={{ color: "#6c757d", fontWeight: 700 }}>Project Cost</div>
+              <div style={{ color: "#6c757d", fontWeight: 700 }}>Activity Cost</div>
               <div>₹ {costInfoData.projectCost.toLocaleString("en-IN")}</div>
 
               <div style={{ color: "#6c757d", fontWeight: 700 }}>Opportunity Cost</div>
@@ -4296,13 +4345,13 @@ export const StatusUpdate = () => {
           </TabPane>
 
           {/* COST TAB */}
-          <TabPane tab="Cost" key="cost">
+          <TabPane tab="Budgetary Cost" key="cost">
             {costLoading ? (
               <Spin />
             ) : activityCost ? (
               <div style={{ lineHeight: 2 }}>
                 <div>
-                  <strong>Project Cost:</strong>{" "}
+                  <strong>Activity Cost:</strong>{" "}
                   {activityCost.projectCost != null
                     ? `₹${activityCost.projectCost.toLocaleString("en-IN")}`
                     : "—"}

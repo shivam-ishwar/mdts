@@ -45,6 +45,7 @@ export const RegisterNewProject: React.FC = () => {
     { id: 2, title: "Locations" },
     { id: 3, title: "Contractual Details" },
     { id: 4, title: "Financial Parameters" },
+    { id: 5, title: "MOC Efficiency Parameters" },
   ];
 
   const [formStepsData, setFormStepsData] = useState<any[]>(() => {
@@ -88,6 +89,11 @@ export const RegisterNewProject: React.FC = () => {
     patPerTon: "₹/ton",
     roePercentage: "%",
     rocePercentage: "%",
+    targetOverallMocEfficiency: "%",
+    baselineMocEfficiency: "%",
+    plannedAnnualImprovement: "%",
+    equipmentAvailabilityTarget: "%",
+    energyUseBenchmark: "kWh/t",
   };
   const numericSuffixHelpByKey: Record<string, string> = {
     reserve: "Million tonnes",
@@ -106,6 +112,11 @@ export const RegisterNewProject: React.FC = () => {
     patPerTon: "Rupees per tonne",
     roePercentage: "Percent",
     rocePercentage: "Percent",
+    targetOverallMocEfficiency: "Percent",
+    baselineMocEfficiency: "Percent",
+    plannedAnnualImprovement: "Percent",
+    equipmentAvailabilityTarget: "Percent",
+    energyUseBenchmark: "Kilowatt-hours per tonne",
   };
 
   const renderUnitSuffix = (fieldKey: string) => {
@@ -138,6 +149,7 @@ export const RegisterNewProject: React.FC = () => {
         project.locations || {},
         project.contractualDetails || {},
         project.financialParameters || {},
+        project.mocEfficiencyParameters || {},
       ];
 
       setFormStepsData(stepsData);
@@ -241,6 +253,7 @@ export const RegisterNewProject: React.FC = () => {
       locations: finalData[1] || {},
       contractualDetails: finalData[2] || {},
       financialParameters: finalData[3] || {},
+      mocEfficiencyParameters: finalData[4] || {},
       initialStatus: { library: "", items: [] },
       documents: contractualDocuments,
       userGuiId: loggedInUser?.guiId,
@@ -357,6 +370,13 @@ export const RegisterNewProject: React.FC = () => {
       patPerTon: "",
       roePercentage: "",
       rocePercentage: "",
+      targetOverallMocEfficiency: "",
+      baselineMocEfficiency: "",
+      plannedAnnualImprovement: "",
+      equipmentAvailabilityTarget: "",
+      energyUseBenchmark: "",
+      measurementFrequency: "",
+      mocRemarks: "",
       ...(Array.isArray(allLibrariesName) ? allLibrariesName : []).reduce(
         (acc: any, moduleName: any) => {
           if (typeof moduleName === "string") {
@@ -980,6 +1000,119 @@ export const RegisterNewProject: React.FC = () => {
           </Form>
         );
 
+      case 5:
+        return (
+          <Form style={{ marginTop: "15px" }} layout="horizontal">
+            <Row gutter={[16, 16]}>
+              {[
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Target overall MOC efficiency
+                      <Tooltip title="Target overall Management of Change / operational efficiency">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "Target overall MOC efficiency",
+                  key: "targetOverallMocEfficiency",
+                  placeholder: "Enter target efficiency",
+                },
+                {
+                  label: "Baseline MOC efficiency",
+                  labelText: "Baseline MOC efficiency",
+                  key: "baselineMocEfficiency",
+                  placeholder: "Enter baseline efficiency",
+                },
+                {
+                  label: "Planned annual improvement",
+                  labelText: "Planned annual improvement",
+                  key: "plannedAnnualImprovement",
+                  placeholder: "Enter planned improvement",
+                },
+                {
+                  label: "Target equipment availability",
+                  labelText: "Target equipment availability",
+                  key: "equipmentAvailabilityTarget",
+                  placeholder: "Enter target availability",
+                },
+                {
+                  label: (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      Energy use benchmark
+                      <Tooltip title="Benchmark energy intensity">
+                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
+                      </Tooltip>
+                    </span>
+                  ),
+                  labelText: "Energy use benchmark",
+                  key: "energyUseBenchmark",
+                  placeholder: "Enter benchmark value",
+                },
+              ].map(({ label, labelText, key, placeholder }) => (
+                <Col span={24} key={key}>
+                  <Form.Item
+                    colon={false}
+                    label={label}
+                    labelAlign="left"
+                    labelCol={{ span: 6 }}
+                    wrapperCol={{ span: 18 }}
+                    validateStatus={errors[key] ? "error" : ""}
+                    help={errors[key] ? `${labelText} is required` : ""}
+                  >
+                    <Input
+                      type="number"
+                      value={formData[key] || ""}
+                      placeholder={placeholder}
+                      suffix={renderUnitSuffix(key)}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                    />
+                  </Form.Item>
+                </Col>
+              ))}
+              <Col span={24}>
+                <Form.Item
+                  colon={false}
+                  label="Measurement frequency"
+                  labelAlign="left"
+                  labelCol={{ span: 6 }}
+                  wrapperCol={{ span: 18 }}
+                >
+                  <Select
+                    allowClear
+                    placeholder="Select frequency"
+                    value={formData.measurementFrequency || undefined}
+                    onChange={(value) => handleChange("measurementFrequency", value || "")}
+                    style={{ width: "100%" }}
+                  >
+                    {["Monthly", "Quarterly", "Half-yearly", "Annual"].map((opt) => (
+                      <Select.Option key={opt} value={opt}>
+                        {opt}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item
+                  colon={false}
+                  label="Remarks / notes"
+                  labelAlign="left"
+                  labelCol={{ span: 6 }}
+                  wrapperCol={{ span: 18 }}
+                >
+                  <Input.TextArea
+                    rows={3}
+                    value={formData.mocRemarks || ""}
+                    placeholder="Optional notes on MOC efficiency targets or methodology"
+                    onChange={(e) => handleChange("mocRemarks", e.target.value)}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        );
+
       default:
         return null;
     }
@@ -1193,11 +1326,34 @@ export const RegisterNewProject: React.FC = () => {
       rocePercentage: String(raw?.financialParameters?.rocePercentage ?? raw?.rocePercentage ?? ""),
     };
 
+    const mocEfficiencyParameters = {
+      targetOverallMocEfficiency: String(
+        raw?.mocEfficiencyParameters?.targetOverallMocEfficiency ?? raw?.targetOverallMocEfficiency ?? ""
+      ),
+      baselineMocEfficiency: String(
+        raw?.mocEfficiencyParameters?.baselineMocEfficiency ?? raw?.baselineMocEfficiency ?? ""
+      ),
+      plannedAnnualImprovement: String(
+        raw?.mocEfficiencyParameters?.plannedAnnualImprovement ?? raw?.plannedAnnualImprovement ?? ""
+      ),
+      equipmentAvailabilityTarget: String(
+        raw?.mocEfficiencyParameters?.equipmentAvailabilityTarget ?? raw?.equipmentAvailabilityTarget ?? ""
+      ),
+      energyUseBenchmark: String(
+        raw?.mocEfficiencyParameters?.energyUseBenchmark ?? raw?.energyUseBenchmark ?? ""
+      ),
+      measurementFrequency: String(
+        raw?.mocEfficiencyParameters?.measurementFrequency ?? raw?.measurementFrequency ?? ""
+      ),
+      mocRemarks: String(raw?.mocEfficiencyParameters?.mocRemarks ?? raw?.mocRemarks ?? ""),
+    };
+
     return {
       projectParameters,
       locations,
       contractualDetails,
       financialParameters,
+      mocEfficiencyParameters,
       initialStatus: raw?.initialStatus ?? { library: "", items: [] },
       documents: ensureArray(raw?.documents).map((doc: any, idx: number) => sanitizeDocument(doc, idx)),
       userGuiId: raw?.userGuiId ?? user?.guiId,
@@ -1488,7 +1644,7 @@ export const RegisterNewProject: React.FC = () => {
         <div style={{ padding: "0 6px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ fontSize: 12, opacity: 0.75 }}>
             Paste an array of projects or a single project object. You can use either nested sections
-            (projectParameters, locations, contractualDetails, financialParameters) or flat fields.
+            (projectParameters, locations, contractualDetails, financialParameters, mocEfficiencyParameters) or flat fields.
           </div>
 
           <Input.TextArea
