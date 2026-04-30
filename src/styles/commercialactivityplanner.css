@@ -1,3 +1,21 @@
+.cap-page-tabs.ant-tabs .ant-tabs-nav {
+  margin: 0 8px;
+  padding: 0 4px;
+  font-weight: 800;
+}
+
+.cap-page-tabs.ant-tabs .ant-tabs-tab {
+  padding: 10px 16px;
+}
+
+.cap-main--budgetary-tab {
+  min-height: calc(100vh - 220px);
+}
+
+.cap-content--budgetary-tab {
+  height: calc(100vh - 220px);
+}
+
 .cap-main {
   background: var(--bg-main);
   color: var(--text-secondary);

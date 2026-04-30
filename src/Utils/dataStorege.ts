@@ -99,6 +99,8 @@ export interface ActivityCost {
   activityName?: string;
   projectCost?: number;
   opportunityCost?: number;
+  /** Reference / business code (distinct from numeric opportunity cost). */
+  opportunityCode?: string;
   currency?: string;
   updatedAt?: string;
 }
@@ -141,8 +143,6 @@ export interface CommercialActivity {
 
   commercialUndertaken?: boolean;
   leadTimeDays?: number | null;
-
-  orderProcessingStatus?: string | null;
 
   updatedAt?: string;
 }

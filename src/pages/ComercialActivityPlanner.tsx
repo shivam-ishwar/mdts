@@ -35,7 +35,6 @@ interface CommercialActivityRow {
     actualFinish?: string | null;
     commercialUndertaken: boolean;
     leadTimeDays: number | null;
-    orderProcessingStatus: string;
     budgetAmount?: number | null;
     isModule?: boolean;
     children?: CommercialActivityRow[];
@@ -157,7 +156,6 @@ const CommercialActivityPlanner: React.FC = () => {
                     actualFinish: existing?.actualFinish ?? activity.actualFinish ?? null,
                     commercialUndertaken: existing?.commercialUndertaken ?? false,
                     leadTimeDays: existing?.leadTimeDays !== undefined ? existing.leadTimeDays : null,
-                    orderProcessingStatus: existing?.orderProcessingStatus || "Yet to Start",
                     budgetAmount,
                     hasRevisedBudget: !!budget.hasRevisedBudget,
                 });
@@ -190,7 +188,6 @@ const CommercialActivityPlanner: React.FC = () => {
             actualFinish: row.actualFinish ?? null,
             commercialUndertaken: row.commercialUndertaken,
             leadTimeDays: row.leadTimeDays,
-            orderProcessingStatus: row.orderProcessingStatus,
         });
     };
 
@@ -200,7 +197,6 @@ const CommercialActivityPlanner: React.FC = () => {
             ...row,
             commercialUndertaken: undertaken,
             leadTimeDays: undertaken ? row.leadTimeDays : null,
-            orderProcessingStatus: undertaken ? row.orderProcessingStatus || "Yet to Start" : "Yet to Start",
         };
         updateRow(row.key, updated);
         void persistRow(updated);
@@ -246,7 +242,6 @@ const CommercialActivityPlanner: React.FC = () => {
                 actualFinish: null,
                 commercialUndertaken: false,
                 leadTimeDays: null,
-                orderProcessingStatus: "",
                 isModule: true,
                 children: group.rows,
                 budgetAmount: null,
@@ -434,7 +429,7 @@ const CommercialActivityPlanner: React.FC = () => {
                             <Space size={8} align="center">
                                 <Text className="cap-meta-label">Updated:</Text>
                                 <Text className="cap-meta-value">
-                                    {timelineInfo.updatedAt ? dayjs(timelineInfo.updatedAt).format("DD-MM-YYYY HH:mm") : "-"}
+                                    {timelineInfo.updatedAt ? dayjs(timelineInfo.updatedAt).format("DD-MM-YYYY") : "-"}
                                 </Text>
                             </Space>
                         )}

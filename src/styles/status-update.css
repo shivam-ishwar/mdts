@@ -541,7 +541,7 @@
 
 .status-update-items {
     padding: 0 8px 8px;
-    height: calc(100vh - 275px);
+    height: calc(100vh - 315px);
 }
 
 .status-update-table {
@@ -776,4 +776,326 @@
 
 [data-theme="dark"] .project-timeline-table .ant-table-tbody>tr.activity-row.selected-red-row>td {
     color: var(--text-primary-dark) !important;
+}
+
+.budgetary-cost-modal.ant-modal {
+    max-width: calc(100vw - 24px);
+    padding-bottom: 0;
+    --su-surface: var(--bg-surface);
+    --su-muted: var(--bg-muted);
+    --su-border: var(--border);
+    --su-text: var(--text-primary);
+    --su-text-2: var(--text-secondary);
+    --su-text-muted: var(--text-muted);
+    --su-accent: var(--color-primary);
+    --su-shadow: var(--shadow-sm);
+    --su-shadow-md: var(--shadow-md);
+    --su-radius-sm: var(--radius-sm);
+    --su-radius-md: var(--radius-md);
+}
+
+[data-theme="dark"] .budgetary-cost-modal.ant-modal {
+    --su-surface: var(--bg-surface-dark);
+    --su-muted: rgba(148, 163, 184, 0.1);
+    --su-border: var(--border-dark);
+    --su-text: var(--text-primary-dark);
+    --su-text-2: var(--text-secondary-dark);
+    --su-text-muted: var(--text-muted-dark);
+    --su-accent: var(--color-primary-dark);
+}
+
+.budgetary-cost-modal.ant-modal .ant-modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 48px);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--su-shadow-md);
+}
+
+.budgetary-cost-modal .ant-modal-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px 16px;
+    overflow: hidden;
+}
+
+.budgetary-cost-modal-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    max-height: min(72vh, 760px);
+}
+
+.budgetary-cost-modal-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-right: 4px;
+}
+
+.budgetary-cost-tabs.ant-tabs {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.budgetary-cost-form-panel {
+    border: 1px solid var(--su-border);
+    border-radius: var(--su-radius-md);
+    background: var(--su-surface);
+    box-shadow: var(--su-shadow);
+    padding: 14px 16px;
+}
+
+.budgetary-cost-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    max-width: 100%;
+}
+
+.budgetary-cost-field-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 160px) 1fr;
+    gap: 12px 16px;
+    align-items: center;
+}
+
+.budgetary-cost-field-row--opportunity {
+    align-items: flex-start;
+}
+
+.budgetary-cost-field-row--opportunity .budgetary-cost-field-label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+}
+
+.budgetary-cost-field-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--su-text-muted);
+    line-height: 1.3;
+}
+
+.budgetary-cost-field-control {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Fill the grid column; affix wrapper matches plain input width */
+.budgetary-cost-modal .budgetary-cost-field-control .ant-input-affix-wrapper.budgetary-cost-input,
+.budgetary-cost-modal .budgetary-cost-field-control .budgetary-cost-input.ant-input:not(textarea) {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--su-radius-sm);
+}
+
+.budgetary-cost-field-control .ant-input-number,
+.budgetary-cost-input.ant-input-number {
+    width: 100%;
+    max-width: 100%;
+    border-radius: var(--su-radius-sm);
+}
+
+.budgetary-cost-field-control .ant-input-number-input {
+    font-weight: 600;
+}
+
+.budgetary-cost-opportunity-switch.ant-switch {
+    align-self: flex-start;
+}
+
+.budgetary-cost-tabs .ant-tabs-nav::before {
+    border-color: var(--su-border);
+}
+
+.budgetary-cost-tabs .ant-tabs-nav-list {
+    gap: 8px !important;
+    justify-content: flex-start !important;
+}
+
+.budgetary-cost-tabs .ant-tabs-tab {
+    font-weight: 700;
+    padding: 6px 12px;
+    margin: 0 !important;
+    color: var(--su-text-2);
+    transition: color 0.2s ease;
+}
+
+.budgetary-cost-tabs .ant-tabs-tab + .ant-tabs-tab {
+    margin-inline-start: 0 !important;
+}
+
+.budgetary-cost-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
+    color: var(--su-accent);
+    font-weight: 800;
+}
+
+.budgetary-cost-tabs .ant-tabs-ink-bar {
+    background: var(--su-accent);
+    height: 3px;
+    border-radius: 3px 3px 0 0;
+}
+
+.budgetary-cost-modal-footer .ant-btn-primary {
+    min-width: 100px;
+    font-weight: 700;
+    border-radius: var(--su-radius-sm);
+}
+
+.budgetary-cost-modal-footer .ant-btn-default {
+    font-weight: 600;
+    border-radius: var(--su-radius-sm);
+}
+
+.budgetary-cost-modal-footer {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 14px;
+    margin-top: 8px;
+    border-top: 1px solid var(--su-border);
+    background: var(--su-surface);
+}
+
+.budgetary-cost-tabs {
+    min-height: 0;
+}
+
+.budgetary-cost-tabs.ant-tabs-top > .ant-tabs-nav {
+    flex-shrink: 0;
+    margin-bottom: 4px;
+}
+
+.budgetary-cost-tabs .ant-tabs-content-holder {
+    flex: 1;
+    min-height: 0;
+}
+
+.budgetary-cost-tabs .ant-tabs-content {
+    height: 100%;
+}
+
+.budgetary-cost-tabs .ant-tabs-tabpane {
+    height: 100%;
+}
+
+.budgetary-cost-tabs .ant-tabs-tabpane-active {
+    display: flex !important;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.budgetary-cost-selected-tab.budgetary-cost-tabpane--form {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 0 4px;
+}
+
+.budgetary-cost-selected-tab {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.budgetary-cost-activity-budget-tab {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 2px 0 0;
+}
+
+/* Opportunity code: clear visual difference — locked (switch off) vs editable (switch on) */
+.budgetary-cost-modal .budgetary-cost-opportunity-input--locked.ant-input,
+.budgetary-cost-modal .budgetary-cost-opportunity-input--locked.ant-input-disabled {
+    color: var(--su-text-muted, #64748b) !important;
+    background: var(--su-muted, #f1f5f9) !important;
+    border-color: var(--su-border, #e2e8f0) !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+}
+
+.budgetary-cost-modal .budgetary-cost-opportunity-input--editable.ant-input:not(:disabled) {
+    background: var(--su-surface, #fff);
+    border-color: var(--su-border, #d9d9d9);
+    cursor: text;
+}
+
+[data-theme="dark"] .budgetary-cost-modal .budgetary-cost-opportunity-input--locked.ant-input,
+[data-theme="dark"] .budgetary-cost-modal .budgetary-cost-opportunity-input--locked.ant-input-disabled {
+    color: var(--su-text-muted, #94a3b8) !important;
+    background: rgba(148, 163, 184, 0.12) !important;
+    border-color: var(--su-border, #334155) !important;
+}
+
+/* Activity readiness filters (Status Update) */
+.status-readiness-toolbar {
+    margin: 0 10px 8px;
+    padding: 10px 14px;
+    border: 1px solid var(--su-border);
+    border-radius: var(--su-radius-md);
+    background: var(--su-surface);
+    box-shadow: var(--su-shadow);
+}
+
+.status-readiness-toolbar-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+
+.status-readiness-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--su-text-muted);
+}
+
+.status-readiness-spin {
+    margin-left: 4px;
+}
+
+.status-readiness-divider {
+    height: 1.25em;
+    margin: 0;
+    border-color: var(--su-border);
+}
+
+.status-readiness-checks .ant-checkbox-wrapper {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--su-text);
+}
+
+.status-readiness-clear.ant-btn-link {
+    padding: 0 4px;
+    font-weight: 700;
+    margin-left: auto;
+}
+
+.status-readiness-hint {
+    display: block;
+    margin-top: 8px;
+    font-size: 12px;
 }

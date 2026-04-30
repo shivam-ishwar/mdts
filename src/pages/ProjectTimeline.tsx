@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "../styles/project-timeline.css";
+import "../styles/activity-details.css";
+import { ActivityDetailsBudgetBody, ActivityDetailsCostBody } from "../Components/activityDetailsPanels";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { FolderOpenOutlined } from "@mui/icons-material";
@@ -256,7 +258,7 @@ const ProjectTimeline = (project: any) => {
 
         worksheet.mergeCells("B3:G3");
         const timestamp = worksheet.getCell("B3");
-        timestamp.value = `Generated On: ${dayjs().format("DD-MM-YYYY HH:mm:ss")}`;
+        timestamp.value = `Generated On: ${dayjs().format("DD-MM-YYYY")}`;
         timestamp.font = { italic: true, size: 12, color: { argb: "555555" } };
         timestamp.alignment = subtitleStyle.alignment;
 
@@ -1129,41 +1131,55 @@ const ProjectTimeline = (project: any) => {
                     setActivityBudget(null);
                     setActivityCost(null);
                 }}
-                width={'60%'}
+                width="min(720px, calc(100vw - 32px))"
                 footer={null}
-                className="modal-container"
+                className="modal-container activity-details-modal"
             >
-                <Tabs activeKey={detailsActiveTab} onChange={setDetailsActiveTab} style={{ padding: '0 24px 24px 10px' }}>
+                <Tabs activeKey={detailsActiveTab} onChange={setDetailsActiveTab} className="activity-details-tabs">
                     <TabPane tab="Notes" key="notes">
-                        <List
-                            dataSource={selectedNotes}
-                            locale={{ emptyText: "No notes available" }}
-                            itemLayout="horizontal"
-                            style={{ marginBottom: 20 }}
-                            renderItem={(item: any) => (
-                                <List.Item style={{ padding: "8px 0" }}>
-                                    <List.Item.Meta
-                                        title={
-                                            <div className="note-meta">
-                                                {item.createdBy && (
-                                                    <span className="note-author">
-                                                        <UserOutlined />
-                                                        {item.createdBy}
+                        <div className="activity-details-notes">
+                            <List
+                                className="activity-details-notes-list"
+                                dataSource={selectedNotes}
+                                split={false}
+                                locale={{ emptyText: "No notes available" }}
+                                itemLayout="horizontal"
+                                renderItem={(item: any) => (
+                                    <List.Item className="activity-details-notes__item">
+                                        <List.Item.Meta
+                                            className="activity-details-notes__meta"
+                                            title={
+                                                <div className="note-meta activity-details-notes__byline">
+                                                    {item.createdBy && (
+                                                        <span className="note-author">
+                                                            <UserOutlined />
+                                                            {item.createdBy}
+                                                        </span>
+                                                    )}
+                                                    {(item.createdAt || item.updatedAt) && (
+                                                        <span className="note-timestamp">
+                                                            <ClockCircleOutlined />
+                                                            {dayjs(item.createdAt || item.updatedAt).format(
+                                                                "DD-MM-YYYY"
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            }
+                                            description={
+                                                item.text ? (
+                                                    <div className="activity-details-notes__body">{item.text}</div>
+                                                ) : (
+                                                    <span className="activity-details-notes__empty-text">
+                                                        No note text
                                                     </span>
-                                                )}
-                                                {(item.createdAt || item.updatedAt) && (
-                                                    <span className="note-timestamp">
-                                                        <ClockCircleOutlined />
-                                                        {dayjs(item.createdAt).format('DD MMM YYYY HH:mm')}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        }
-                                        description={item.text}
-                                    />
-                                </List.Item>
-                            )}
-                        />
+                                                )
+                                            }
+                                        />
+                                    </List.Item>
+                                )}
+                            />
+                        </div>
                     </TabPane>
 
                     {/* <TabPane tab="Cost" key="cost">
@@ -1177,31 +1193,11 @@ const ProjectTimeline = (project: any) => {
                         )}
                     </TabPane> */}
                     <TabPane tab="Cost" key="cost">
-                        {costLoading ? (
-                            <Spin />
-                        ) : activityCost ? (
-                            <div style={{ lineHeight: '2' }}>
-                                <div>
-                                    <strong>Project Cost:</strong>{" "}
-                                    {activityCost.projectCost != null
-                                        ? `₹${activityCost.projectCost.toLocaleString("en-IN")}`
-                                        : "—"}
-                                </div>
-                                <div>
-                                    <strong>Opportunity Cost:</strong>{" "}
-                                    {activityCost.opportunityCost != null
-                                        ? `₹${activityCost.opportunityCost.toLocaleString("en-IN")}`
-                                        : "—"}
-                                </div>
-                                {activityCost.updatedAt && (
-                                    <div style={{ marginTop: 8, fontSize: 12, color: "#888", float: "right" }}>
-                                        Last updated: {dayjs(activityCost.updatedAt).format("DD MMM YYYY HH:mm")}
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div>No cost information available for this activity.</div>
-                        )}
+                        <ActivityDetailsCostBody
+                            cost={activityCost}
+                            loading={costLoading}
+                            showOpportunityCode={false}
+                        />
                     </TabPane>
 
                     <TabPane tab="RACI" key="raci">
@@ -1238,48 +1234,7 @@ const ProjectTimeline = (project: any) => {
                     </TabPane>
 
                     <TabPane tab="Budget" key="budget">
-                        {budgetLoading ? (
-                            <Spin />
-                        ) : activityBudget ? (
-                            <div style={{ lineHeight: 2 }}>
-                                <div>
-                                    <strong>Budget:</strong>{" "}
-                                    {activityBudget.originalBudget != null
-                                        ? `₹${activityBudget.originalBudget.toLocaleString("en-IN")}`
-                                        : "—"}
-                                </div>
-
-                                <div>
-                                    <strong>Budgeted On:</strong>{" "}
-                                    {activityBudget.originalBudgetDate
-                                        ? dayjs(activityBudget.originalBudgetDate).format("DD MMM YYYY")
-                                        : "—"}
-                                </div>
-
-                                <div>
-                                    <strong>Revised Budget:</strong>{" "}
-                                    {activityBudget.revisedBudget != null
-                                        ? `₹${activityBudget.revisedBudget.toLocaleString("en-IN")}`
-                                        : "—"}
-                                </div>
-
-                                <div>
-                                    <strong>Revised On:</strong>{" "}
-                                    {activityBudget.revisionHistory && activityBudget.revisionHistory.length > 0
-                                        ? dayjs(
-                                            activityBudget.revisionHistory[
-                                                activityBudget.revisionHistory.length - 1
-                                            ].date
-                                        ).format("DD MMM YYYY")
-                                        : activityBudget.revisedBudgetDate
-                                            ? dayjs(activityBudget.revisedBudgetDate).format("DD MMM YYYY")
-                                            : "—"}
-                                </div>
-
-                            </div>
-                        ) : (
-                            <div>No budget information available for this activity.</div>
-                        )}
+                        <ActivityDetailsBudgetBody budget={activityBudget} loading={budgetLoading} />
                     </TabPane>
 
 

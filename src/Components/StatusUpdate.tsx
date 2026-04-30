@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "../styles/status-update.css";
+import "../styles/activity-details.css";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { AppsRounded, FolderOpenOutlined, SaveOutlined } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { Button, Select, Modal, Input, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover } from "antd";
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, ExclamationCircleOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button, Select, Modal, Input, InputNumber, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover, Switch, Checkbox, Divider } from "antd";
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, ExclamationCircleOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FilterOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUser } from '../Utils/moduleStorage';
+import ActivityBudgetPage from "../pages/ActivityBudget";
 import TextArea from "antd/es/input/TextArea";
 import { ToastContainer } from 'react-toastify';
 import { notify } from "../Utils/ToastNotify.tsx";
 import { UserOutlined } from '@ant-design/icons';
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import type { ActivityBudget, ActivityCost, StandardizedActivity } from "../Utils/dataStorege";
+import { ActivityDetailsBudgetBody, ActivityDetailsCostBody } from "./activityDetailsPanels";
 import riskFactorActionIcon from "../assets/risk-factor-action-icon.png";
 
 dayjs.extend(customParseFormat);
@@ -47,6 +50,28 @@ const { TabPane } = Tabs;
 const makeStandardizationLookupKey = (moduleCode?: string | null, activityCode?: string | null) =>
   `${String(moduleCode || "")}__${String(activityCode || "")}`;
 
+const statusActivityHasBudgetRecord = (b: ActivityBudget): boolean => {
+  const history = Array.isArray(b.revisionHistory) ? b.revisionHistory : [];
+  const last = history.length > 0 ? history[history.length - 1] : null;
+  const n = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  const amount =
+    n(last?.amount) ??
+    n(b.originalBudget) ??
+    n(b.revisedBudget) ??
+    n((b as { totalBudget?: number }).totalBudget) ??
+    n((b as { budgetAmount?: number }).budgetAmount);
+  return amount != null;
+};
+
+const statusActivityHasDefinedCostRecord = (c: ActivityCost): boolean => {
+  const n = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  if (n(c.projectCost) != null) return true;
+  if (n(c.opportunityCost) != null) return true;
+  if (c.opportunityCode != null && String(c.opportunityCode).trim() !== "") return true;
+  return false;
+};
 
 export const StatusUpdate = () => {
   const navigate = useNavigate();
@@ -71,8 +96,11 @@ export const StatusUpdate = () => {
   const [noteInput, setNoteInput] = useState('');
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [openCostCalcModal, setOpenCostCalcModal] = useState(false);
-  const [isOpportunityCostEnabled, setIsOpportunityCostEnabled] = useState(false);
+  const [budgetaryCostTab, setBudgetaryCostTab] = useState<string>("activity-cost");
+  const [isOpportunityCodeEnabled, setIsOpportunityCodeEnabled] = useState(false);
   const [form] = Form.useForm();
+  const [commercialBudgetForm] = Form.useForm();
+  const statusBudgetCommercialUndertaken = Form.useWatch("commercialUndertaken", commercialBudgetForm);
   const [_formValid, setFormValid] = useState(false);
   const [replaneMode, setIsReplanMode] = useState(false);
   const [discardReplaneMode, setIsDiscardReplanMode] = useState(false);
@@ -137,6 +165,115 @@ export const StatusUpdate = () => {
     }, new Map<string, StandardizedActivity>());
   }, [standardizedActivities]);
 
+  const [readinessFilterBudget, setReadinessFilterBudget] = useState(false);
+  const [readinessFilterCommercial, setReadinessFilterCommercial] = useState(false);
+  const [readinessFilterCost, setReadinessFilterCost] = useState(false);
+  const [readinessSets, setReadinessSets] = useState<{
+    budget: Set<string>;
+    commercial: Set<string>;
+    cost: Set<string>;
+  }>(() => ({ budget: new Set(), commercial: new Set(), cost: new Set() }));
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  const budgetaryModalWasOpenRef = useRef(false);
+
+  const loadActivityReadinessSets = useCallback(async (projectId: string | null) => {
+    if (!projectId) {
+      setReadinessSets({ budget: new Set(), commercial: new Set(), cost: new Set() });
+      return;
+    }
+    setReadinessLoading(true);
+    try {
+      const [budgets, commercialRows, costs] = await Promise.all([
+        db.getActivityBudgetsForProject(String(projectId)),
+        db.getCommercialActivitiesForProject(String(projectId)),
+        db.getActivityCostsForProject(String(projectId)),
+      ]);
+      const budget = new Set<string>();
+      for (const b of budgets) {
+        if (b.activityCode && statusActivityHasBudgetRecord(b)) {
+          budget.add(String(b.activityCode));
+        }
+      }
+      const commercial = new Set<string>();
+      for (const c of commercialRows) {
+        if (c.activityCode && c.commercialUndertaken) {
+          commercial.add(String(c.activityCode));
+        }
+      }
+      const cost = new Set<string>();
+      for (const c of costs) {
+        if (c.activityCode && statusActivityHasDefinedCostRecord(c)) {
+          cost.add(String(c.activityCode));
+        }
+      }
+      setReadinessSets({ budget, commercial, cost });
+    } finally {
+      setReadinessLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedProjectId) {
+      void loadActivityReadinessSets(String(selectedProjectId));
+    } else {
+      void loadActivityReadinessSets(null);
+    }
+  }, [selectedProjectId, loadActivityReadinessSets]);
+
+  useEffect(() => {
+    if (openCostCalcModal) {
+      budgetaryModalWasOpenRef.current = true;
+      return;
+    }
+    if (budgetaryModalWasOpenRef.current && selectedProjectId) {
+      budgetaryModalWasOpenRef.current = false;
+      void loadActivityReadinessSets(String(selectedProjectId));
+    }
+  }, [openCostCalcModal, selectedProjectId, loadActivityReadinessSets]);
+
+  const filteredDataSource = useMemo(() => {
+    const anyFilter =
+      readinessFilterBudget || readinessFilterCommercial || readinessFilterCost;
+    if (!anyFilter || !dataSource.length) {
+      return dataSource;
+    }
+    const pass = (code: string): boolean => {
+      const c = String(code);
+      if (readinessFilterBudget && !readinessSets.budget.has(c)) return false;
+      if (readinessFilterCommercial && !readinessSets.commercial.has(c)) return false;
+      if (readinessFilterCost && !readinessSets.cost.has(c)) return false;
+      return true;
+    };
+    return dataSource
+      .map((mod: any) => {
+        if (!mod.children?.length) return { ...mod, children: [] };
+        const children = mod.children.filter((act: any) => pass(String(act.Code)));
+        return { ...mod, children };
+      })
+      .filter((mod: any) => mod.children?.length > 0);
+  }, [
+    dataSource,
+    readinessFilterBudget,
+    readinessFilterCommercial,
+    readinessFilterCost,
+    readinessSets,
+  ]);
+
+  useEffect(() => {
+    const anyFilter =
+      readinessFilterBudget || readinessFilterCommercial || readinessFilterCost;
+    if (anyFilter && filteredDataSource.length > 0) {
+      setExpandedKeys(filteredDataSource.map((m: any) => m.key));
+    } else if (!anyFilter && dataSource.length > 0) {
+      setExpandedKeys(dataSource.map((m: any) => m.key));
+    }
+  }, [
+    readinessFilterBudget,
+    readinessFilterCommercial,
+    readinessFilterCost,
+    filteredDataSource,
+    dataSource,
+  ]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -197,22 +334,46 @@ export const StatusUpdate = () => {
   useEffect(() => {
     if (openCostCalcModal && selectedActivityKey) {
       const activity = findActivityByKey(dataSource, selectedActivityKey);
+      setIsOpportunityCodeEnabled(false);
       if (activity?.cost) {
-        const hasOpportunityCost =
-          activity.cost.opCost !== undefined &&
-          activity.cost.opCost !== null &&
-          activity.cost.opCost !== "";
-        setIsOpportunityCostEnabled(hasOpportunityCost);
+        const rawCode = activity.cost.opportunityCode;
+        const codeDisplay =
+          rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== ""
+            ? String(rawCode)
+            : undefined;
         form.setFieldsValue({
           projectCost: activity.cost.projectCost,
-          opCost: hasOpportunityCost ? activity.cost.opCost : undefined
+          opportunityCode: codeDisplay,
         });
       } else {
-        setIsOpportunityCostEnabled(false);
         form.resetFields();
       }
     }
   }, [openCostCalcModal, selectedActivityKey]);
+
+  useEffect(() => {
+    if (openCostCalcModal) {
+      setBudgetaryCostTab("activity-cost");
+    }
+  }, [openCostCalcModal]);
+
+  useEffect(() => {
+    if (!openCostCalcModal || !selectedActivityKey || selectedProjectId == null) {
+      return;
+    }
+    const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+    if (!selection?.activity?.Code) {
+      return;
+    }
+    const code = String(selection.activity.Code);
+    void (async () => {
+      const existing = await db.getCommercialActivity(String(selectedProjectId), code);
+      commercialBudgetForm.setFieldsValue({
+        commercialUndertaken: existing?.commercialUndertaken ?? false,
+        leadTimeDays: existing?.leadTimeDays ?? undefined,
+      });
+    })();
+  }, [openCostCalcModal, selectedActivityKey, selectedProjectId, dataSource, commercialBudgetForm]);
 
   useEffect(() => {
     if (openResponsibilityModal && selectedActivityKey) {
@@ -489,7 +650,7 @@ export const StatusUpdate = () => {
 
     worksheet.mergeCells("B3:G3");
     const timestamp = worksheet.getCell("B3");
-    timestamp.value = `Generated On: ${dayjs().format("DD-MM-YYYY HH:mm:ss")}`;
+    timestamp.value = `Generated On: ${dayjs().format("DD-MM-YYYY")}`;
     timestamp.font = { italic: true, size: 12, color: { argb: "555555" } };
     timestamp.alignment = subtitleStyle.alignment;
 
@@ -1994,14 +2155,55 @@ export const StatusUpdate = () => {
   const handleClose = () => {
     setOpenCostCalcModal(false);
     form.resetFields();
-    setIsOpportunityCostEnabled(false);
+    commercialBudgetForm.resetFields();
+    setIsOpportunityCodeEnabled(false);
     setFormValid(false);
   };
 
+  const budgetCommercialNumericParser = (value: string | undefined): number => {
+    const cleaned = (value || "").replace(/[^\d]/g, "");
+    return cleaned ? Number(cleaned) : NaN;
+  };
+
+  const handleSaveCommercialBudgetTab = async () => {
+    try {
+      const values = await commercialBudgetForm.validateFields();
+      const selection = findActivitySelectionByKey(dataSource, selectedActivityKey);
+      if (!selection?.activity || selectedProjectId == null) {
+        notify.error("Select an activity first.");
+        return;
+      }
+      const act = selection.activity;
+      const mod = selection.module;
+      const undertaken = Boolean(values.commercialUndertaken);
+      await db.upsertCommercialActivity({
+        projectId: String(selectedProjectId),
+        moduleCode: String(mod?.Code || ""),
+        moduleName: String(mod?.keyActivity || mod?.moduleName || ""),
+        activityCode: String(act.Code || ""),
+        activityName: String(act.keyActivity || act.activityName || ""),
+        plannedStart: act.plannedStart ?? act.start ?? null,
+        plannedFinish: act.plannedFinish ?? act.end ?? null,
+        actualStart: act.actualStart ?? null,
+        actualFinish: act.actualFinish ?? null,
+        commercialUndertaken: undertaken,
+        leadTimeDays: undertaken ? ((values.leadTimeDays ?? null) as number | null) : null,
+      });
+      notify.success("Commercial activity saved");
+      if (selectedProjectId) {
+        void loadActivityReadinessSets(String(selectedProjectId));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleValuesChange = () => {
-    const { projectCost, opCost } = form.getFieldsValue();
-    const isOpportunityValid = !isOpportunityCostEnabled || !!opCost;
-    if (projectCost && isOpportunityValid) {
+    const { projectCost, opportunityCode } = form.getFieldsValue();
+    const opportunityOk =
+      !isOpportunityCodeEnabled ||
+      !!(opportunityCode !== undefined && opportunityCode !== null && String(opportunityCode).trim());
+    if (projectCost && opportunityOk) {
       setFormValid(true);
     } else {
       setFormValid(false);
@@ -2068,6 +2270,14 @@ export const StatusUpdate = () => {
     }
     return null;
   };
+
+  const embeddedBudgetActivityCode = useMemo(() => {
+    if (!selectedActivityKey || !dataSource?.length) return null;
+    const act = findActivityByKey(dataSource, selectedActivityKey);
+    if (!act) return null;
+    const c = act.Code != null && act.Code !== "" ? String(act.Code).trim() : "";
+    return c || null;
+  }, [selectedActivityKey, dataSource]);
 
   const standerizeNameValue = Form.useWatch("standerizeName", standardizeForm);
 
@@ -2159,28 +2369,57 @@ export const StatusUpdate = () => {
   const handleConfirm = async () => {
     try {
       const values = await form.validateFields();
+
+      const confirmed = await new Promise<boolean>((resolve) => {
+        Modal.confirm({
+          title: "Save activity cost?",
+          content: "This will update cost details for the selected activity on the current timeline.",
+          okText: "Save",
+          cancelText: "Cancel",
+          centered: true,
+          className: "modal-container",
+          onOk: () => resolve(true),
+          onCancel: () => resolve(false),
+        });
+      });
+      if (!confirmed) {
+        return;
+      }
+
       const selectedActivityRecord = findActivityByKey(dataSource, selectedActivityKey);
       const selectedActivitySelection = findActivitySelectionByKey(dataSource, selectedActivityKey);
       const toNumberOrUndefined = (v: any) =>
         v === undefined || v === null || v === "" ? undefined : Number(v);
       const selectedProjectCost = toNumberOrUndefined(values.projectCost);
-      const selectedOpportunityCost = isOpportunityCostEnabled
-        ? toNumberOrUndefined(values.opCost)
-        : undefined;
+
+      const prevCost = selectedActivityRecord?.cost || {};
+      const persistedOpportunityCode =
+        prevCost.opportunityCode !== undefined &&
+        prevCost.opportunityCode !== null &&
+        String(prevCost.opportunityCode).trim() !== ""
+          ? String(prevCost.opportunityCode).trim()
+          : undefined;
+      const formOpportunityCode = String(values.opportunityCode ?? "").trim() || undefined;
+      const nextOpportunityCode = isOpportunityCodeEnabled
+        ? formOpportunityCode
+        : persistedOpportunityCode;
 
       const updatedDataSource = (prev: any[]): any[] =>
         prev.map(item => {
           if (item.key == selectedActivityKey) {
-            const prevCost = item.cost || {};
+            const itemPrevCost = item.cost || {};
+            const nextCost: Record<string, unknown> = { ...itemPrevCost };
+            if (selectedProjectCost !== undefined) {
+              nextCost.projectCost = selectedProjectCost;
+            }
+            if (nextOpportunityCode) {
+              nextCost.opportunityCode = nextOpportunityCode;
+            } else {
+              delete nextCost.opportunityCode;
+            }
             return {
               ...item,
-              cost: {
-                ...prevCost,
-                ...(selectedProjectCost !== undefined ? { projectCost: selectedProjectCost } : {}),
-                ...(isOpportunityCostEnabled
-                  ? { opCost: selectedOpportunityCost }
-                  : {})
-              }
+              cost: nextCost,
             };
           }
           if (item.children) return { ...item, children: updatedDataSource(item.children) };
@@ -2233,7 +2472,7 @@ export const StatusUpdate = () => {
             ""
           ),
           projectCost: selectedProjectCost,
-          opportunityCost: selectedOpportunityCost,
+          opportunityCode: nextOpportunityCode,
         });
 
         setActivityCost({
@@ -2251,16 +2490,20 @@ export const StatusUpdate = () => {
             ""
           ),
           projectCost: selectedProjectCost,
-          opportunityCost: selectedOpportunityCost,
+          opportunityCode: nextOpportunityCode,
           updatedAt: new Date().toISOString(),
         });
       }
 
+      setIsOpportunityCodeEnabled(false);
       form.setFieldsValue({
         projectCost: values.projectCost,
-        opCost: isOpportunityCostEnabled ? values.opCost : undefined,
+        opportunityCode: nextOpportunityCode,
       });
       notify.success("Cost updated successfully!");
+      if (selectedProjectId) {
+        void loadActivityReadinessSets(String(selectedProjectId));
+      }
     } catch (error) {
       console.error("Validation Failed:", error);
     }
@@ -2997,7 +3240,10 @@ export const StatusUpdate = () => {
 
       const fallbackCost =
         !cost &&
-        (record?.cost?.projectCost != null || record?.cost?.opCost != null)
+        (record?.cost?.projectCost != null ||
+          record?.cost?.opCost != null ||
+          (record?.cost?.opportunityCode != null &&
+            String(record.cost.opportunityCode).trim() !== ""))
           ? {
             projectId: String(selectedProjectId),
             activityCode: String(record.Code),
@@ -3009,6 +3255,11 @@ export const StatusUpdate = () => {
             opportunityCost:
               record?.cost?.opCost != null
                 ? Number(record.cost.opCost)
+                : undefined,
+            opportunityCode:
+              record?.cost?.opportunityCode != null &&
+                String(record.cost.opportunityCode).trim() !== ""
+                ? String(record.cost.opportunityCode)
                 : undefined,
           }
           : null;
@@ -3216,6 +3467,26 @@ export const StatusUpdate = () => {
 
         {selectedProject?.projectTimeline != null && (
           <div className="actions">
+            {selectedProjectTimeline?.status == "Approved" && (
+              <Button
+                type={isStatusUpdateMode ? "primary" : "default"}
+                icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
+                onClick={() => {
+                  if (isStatusUpdateMode) {
+                    handleSaveStatus();
+                  } else {
+                    handleUpdateStatus();
+                  }
+                }}
+                className={
+                  isStatusUpdateMode
+                    ? "project-timeline-btn project-timeline-btn-status-save"
+                    : "project-timeline-btn project-timeline-btn-status-update"
+                }
+              >
+                {isStatusUpdateMode ? "Save Status" : "Update Status"}
+              </Button>
+            )}
             <Popover
               trigger="click"
               placement="bottomRight"
@@ -3255,10 +3526,10 @@ export const StatusUpdate = () => {
                         }}
                         className="project-timeline-btn project-timeline-btn-cost"
                       >
-                        Cost
+                        Budgetary
                       </Button>,
                       !selectedActivityKey,
-                      "Select a key activity row first, then open Cost details."
+                      "Select a key activity row first, then open Budgetary."
                     )
                   )}
 
@@ -3403,28 +3674,6 @@ export const StatusUpdate = () => {
                     )
                   )}
 
-                  {selectedProjectTimeline?.status == "Approved" && (
-                    <Button
-                      type={isStatusUpdateMode ? "primary" : "default"}
-                      icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
-                      onClick={() => {
-                        if (isStatusUpdateMode) {
-                          handleSaveStatus();
-                        } else {
-                          handleUpdateStatus();
-                        }
-                        setIsActionsPopoverOpen(false);
-                      }}
-                      className={
-                        isStatusUpdateMode
-                          ? "project-timeline-btn project-timeline-btn-status-save"
-                          : "project-timeline-btn project-timeline-btn-status-update"
-                      }
-                    >
-                      {isStatusUpdateMode ? "Save Status" : "Update Status"}
-                    </Button>
-                  )}
-
                   {selectedProjectTimeline?.status !== "Revised" &&
                     selectedProjectTimeline?.status != "Approved" &&
                     selectedProjectTimeline?.status != "replanned" && (
@@ -3465,16 +3714,81 @@ export const StatusUpdate = () => {
                 </div>
               }
             >
-              <Button
-                type="default"
-                icon={<AppsRounded className="status-actions-trigger-icon" />}
-                className="project-timeline-btn status-actions-trigger"
-                aria-label="Open actions menu"
-              />
+              <Tooltip title="Quick actions — documents, budgetary, RACI, notes, and more">
+                <Button
+                  type="default"
+                  icon={<AppsRounded className="status-actions-trigger-icon" />}
+                  className="project-timeline-btn status-actions-trigger"
+                  aria-label="Open quick actions menu"
+                />
+              </Tooltip>
             </Popover>
           </div>
         )}
       </div>
+
+      {selectedProjectId &&
+        dataSource.length > 0 &&
+        selectedProject?.projectTimeline != null && (
+          <div className="status-readiness-toolbar" aria-label="Activity readiness filters">
+            <div className="status-readiness-toolbar-inner">
+              <span className="status-readiness-title">
+                <FilterOutlined aria-hidden />
+                Readiness filters
+                {readinessLoading ? (
+                  <Spin size="small" className="status-readiness-spin" />
+                ) : null}
+              </span>
+              <Divider type="vertical" className="status-readiness-divider" />
+              <Space size={[12, 8]} wrap className="status-readiness-checks">
+                <Tooltip title="Show activities that have an activity budget saved for this project">
+                  <Checkbox
+                    checked={readinessFilterBudget}
+                    onChange={(e) => setReadinessFilterBudget(e.target.checked)}
+                  >
+                    Budget captured
+                  </Checkbox>
+                </Tooltip>
+                <Tooltip title="Show activities marked as commercial activity undertaken">
+                  <Checkbox
+                    checked={readinessFilterCommercial}
+                    onChange={(e) => setReadinessFilterCommercial(e.target.checked)}
+                  >
+                    Commercial planned
+                  </Checkbox>
+                </Tooltip>
+                <Tooltip title="Show activities with project cost or opportunity code saved in Budgetary cost">
+                  <Checkbox
+                    checked={readinessFilterCost}
+                    onChange={(e) => setReadinessFilterCost(e.target.checked)}
+                  >
+                    Activity cost defined
+                  </Checkbox>
+                </Tooltip>
+              </Space>
+              <Button
+                type="link"
+                size="small"
+                className="status-readiness-clear"
+                disabled={
+                  !readinessFilterBudget && !readinessFilterCommercial && !readinessFilterCost
+                }
+                onClick={() => {
+                  setReadinessFilterBudget(false);
+                  setReadinessFilterCommercial(false);
+                  setReadinessFilterCost(false);
+                }}
+              >
+                Clear
+              </Button>
+            </div>
+            {(readinessFilterBudget || readinessFilterCommercial || readinessFilterCost) && (
+              <Typography.Text type="secondary" className="status-readiness-hint">
+                Multiple selections apply together (activities must match every checked filter).
+              </Typography.Text>
+            )}
+          </div>
+        )}
 
       <hr />
     </>
@@ -3486,7 +3800,7 @@ export const StatusUpdate = () => {
         <div className="status-update-table">
           <Table
             columns={finalColumns}
-            dataSource={dataSource}
+            dataSource={filteredDataSource}
             className="project-timeline-table"
             pagination={false}
             expandable={{
@@ -3744,7 +4058,7 @@ export const StatusUpdate = () => {
                       {(item.createdAt || item.updatedAt) && (
                         <span className="note-timestamp">
                           <ClockCircleOutlined />
-                          {dayjs(item.createdAt).format('DD MMM YYYY HH:mm')}
+                          {dayjs(item.createdAt).format("DD-MM-YYYY")}
                         </span>
                       )}
                     </div>
@@ -3761,81 +4075,166 @@ export const StatusUpdate = () => {
         title="Budgetary Cost"
         open={openCostCalcModal}
         onCancel={handleClose}
-        onOk={handleConfirm}
-        // okButtonProps={{ disabled: !formValid }}
+        footer={null}
         destroyOnClose
-        className="modal-container"
+        className="modal-container budgetary-cost-modal"
         maskClosable={false}
         keyboard={false}
+        width="min(760px, calc(100vw - 32px))"
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onValuesChange={handleValuesChange}
-          style={{ padding: "0px 10px", display: 'flex', flexDirection: 'column', gap: '10px' }}
-        >
-          <Form.Item
-            label=""
-            style={{ marginBottom: 16 }}
-          >
-            <Row align="middle" gutter={8}>
-              <Col flex="150px">Activity Cost</Col>
-              <Col flex="auto">
-                <Form.Item
-                  name="projectCost"
-                  noStyle
-                  rules={[{ required: true, message: 'Please enter Activity Cost' }]}
-                >
-                  <Input type="number" min={0} placeholder="Enter Activity Cost" />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form.Item>
+        <div className="budgetary-cost-modal-inner">
+          <div className="budgetary-cost-modal-scroll">
+            <Tabs
+              activeKey={budgetaryCostTab}
+              onChange={setBudgetaryCostTab}
+              className="budgetary-cost-tabs"
+            >
+              <TabPane tab="Activity Cost" key="activity-cost">
+                <div className="budgetary-cost-selected-tab budgetary-cost-tabpane--form">
+                  <div className="budgetary-cost-form-panel">
+                    <Form
+                      form={form}
+                      layout="vertical"
+                      onValuesChange={handleValuesChange}
+                      className="budgetary-cost-form"
+                      requiredMark={false}
+                    >
+                      <div className="budgetary-cost-field-row">
+                        <div className="budgetary-cost-field-label">Activity cost (₹)</div>
+                        <div className="budgetary-cost-field-control">
+                          <Form.Item
+                            name="projectCost"
+                            noStyle
+                            rules={[{ required: true, message: "Please enter activity cost" }]}
+                          >
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="Amount"
+                              className="budgetary-cost-input"
+                            />
+                          </Form.Item>
+                        </div>
+                      </div>
 
-          <Form.Item label="" style={{ marginBottom: 24 }}>
-            <Row align="middle" gutter={8}>
-              <Col flex="150px">
-                <Space size={8}>
-                  <span>Opportunity Cost</span>
-                  <Button
-                    size="small"
-                    type={isOpportunityCostEnabled ? "default" : "primary"}
-                    onClick={() => {
-                      if (!isOpportunityCostEnabled) {
-                        setIsOpportunityCostEnabled(true);
-                      } else {
-                        setIsOpportunityCostEnabled(false);
-                        form.setFieldsValue({ opCost: undefined });
-                      }
-                    }}
-                  >
-                    {isOpportunityCostEnabled ? "Disable" : "Enable"}
-                  </Button>
-                </Space>
-              </Col>
-              <Col flex="auto">
-                <Form.Item
-                  name="opCost"
-                  noStyle
-                  rules={[
-                    {
-                      required: isOpportunityCostEnabled,
-                      message: "Please enter Opportunity Cost",
-                    },
-                  ]}
-                >
-                  <Input
-                    type="number"
-                    min={0}
-                    disabled={!isOpportunityCostEnabled}
-                    placeholder="Enter Opportunity Cost"
+                      <div className="budgetary-cost-field-row budgetary-cost-field-row--opportunity">
+                        <div className="budgetary-cost-field-label">
+                          <span>Opportunity code</span>
+                          <Switch
+                            size="small"
+                            checked={isOpportunityCodeEnabled}
+                            className="budgetary-cost-opportunity-switch"
+                            onChange={(checked) => {
+                              setIsOpportunityCodeEnabled(checked);
+                              const activity = findActivityByKey(dataSource, selectedActivityKey);
+                              const raw = activity?.cost?.opportunityCode;
+                              const saved =
+                                raw !== undefined && raw !== null && String(raw).trim() !== ""
+                                  ? String(raw)
+                                  : undefined;
+                              form.setFieldsValue({ opportunityCode: saved });
+                            }}
+                          />
+                        </div>
+                        <div className="budgetary-cost-field-control">
+                          <Form.Item
+                            name="opportunityCode"
+                            noStyle
+                            rules={[
+                              {
+                                required: isOpportunityCodeEnabled,
+                                message: "Please enter opportunity code",
+                              },
+                            ]}
+                          >
+                            <Input
+                              disabled={!isOpportunityCodeEnabled}
+                              className={
+                                isOpportunityCodeEnabled
+                                  ? "budgetary-cost-opportunity-input budgetary-cost-opportunity-input--editable budgetary-cost-input"
+                                  : "budgetary-cost-opportunity-input budgetary-cost-opportunity-input--locked budgetary-cost-input"
+                              }
+                              placeholder={
+                                isOpportunityCodeEnabled
+                                  ? "Enter code"
+                                  : "Saved code (enable switch to edit)"
+                              }
+                              allowClear={isOpportunityCodeEnabled}
+                            />
+                          </Form.Item>
+                        </div>
+                      </div>
+                    </Form>
+                  </div>
+                </div>
+              </TabPane>
+              <TabPane tab="Activity Budget" key="activity-budget">
+                <div className="budgetary-cost-activity-budget-tab">
+                  <ActivityBudgetPage
+                    embedded
+                    presetProjectId={selectedProjectId != null ? String(selectedProjectId) : null}
+                    restrictToActivityCode={embeddedBudgetActivityCode}
                   />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form.Item>
-        </Form>
-
+                </div>
+              </TabPane>
+              <TabPane tab="Commercial activity" key="commercial-activity">
+                <div className="budgetary-cost-selected-tab budgetary-cost-tabpane--form">
+                  <div className="budgetary-cost-form-panel">
+                    <Form
+                      form={commercialBudgetForm}
+                      layout="vertical"
+                      className="budgetary-cost-form"
+                      requiredMark={false}
+                    >
+                      <div className="budgetary-cost-field-row budgetary-cost-field-row--opportunity">
+                        <div className="budgetary-cost-field-label">
+                          <span>Commercial activity undertaken</span>
+                        </div>
+                        <div className="budgetary-cost-field-control">
+                          <Form.Item name="commercialUndertaken" valuePropName="checked" noStyle>
+                            <Switch className="budgetary-cost-opportunity-switch" />
+                          </Form.Item>
+                        </div>
+                      </div>
+                      <div className="budgetary-cost-field-row">
+                        <div className="budgetary-cost-field-label">Lead time (days)</div>
+                        <div className="budgetary-cost-field-control">
+                          <Form.Item name="leadTimeDays" noStyle>
+                            <InputNumber<number>
+                              className="budgetary-cost-input"
+                              style={{ width: "100%" }}
+                              min={0}
+                              precision={0}
+                              parser={budgetCommercialNumericParser}
+                              disabled={!statusBudgetCommercialUndertaken}
+                            />
+                          </Form.Item>
+                        </div>
+                      </div>
+                    </Form>
+                  </div>
+                </div>
+              </TabPane>
+            </Tabs>
+          </div>
+          {budgetaryCostTab === "activity-cost" || budgetaryCostTab === "commercial-activity" ? (
+            <div className="budgetary-cost-modal-footer">
+              <Button onClick={handleClose}>Cancel</Button>
+              <Button
+                type="primary"
+                onClick={() => {
+                  if (budgetaryCostTab === "activity-cost") {
+                    void handleConfirm();
+                  } else {
+                    void handleSaveCommercialBudgetTab();
+                  }
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </Modal>
 
       <Modal
@@ -4300,77 +4699,63 @@ export const StatusUpdate = () => {
           setStandardizationGroupRecords([]);
           setDetailsActiveTab('notes');
         }}
-        width={'60%'}
+        width="min(720px, calc(100vw - 32px))"
         footer={null}
-        className="modal-container"
+        className="modal-container activity-details-modal"
         maskClosable={false}
         keyboard={false}
       >
         <Tabs
           activeKey={detailsActiveTab}
           onChange={setDetailsActiveTab}
-          style={{ padding: '0 24px 24px 10px' }}
+          className="activity-details-tabs"
         >
           {/* NOTES TAB */}
           <TabPane tab="Notes" key="notes">
-            <List
-              dataSource={selectedNotes}
-              locale={{ emptyText: "No notes available" }}
-              itemLayout="horizontal"
-              style={{ marginBottom: 20 }}
-              renderItem={(item: any) => (
-                <List.Item style={{ padding: "8px 0" }}>
-                  <List.Item.Meta
-                    title={
-                      <div className="note-meta">
-                        {item.createdBy && (
-                          <span className="note-author">
-                            <UserOutlined />
-                            {item.createdBy}
-                          </span>
-                        )}
-                        {(item.createdAt || item.updatedAt) && (
-                          <span className="note-timestamp">
-                            <ClockCircleOutlined />
-                            {dayjs(item.createdAt).format('DD MMM YYYY HH:mm')}
-                          </span>
-                        )}
-                      </div>
-                    }
-                    description={item.text}
-                  />
-                </List.Item>
-              )}
-            />
+            <div className="activity-details-notes">
+              <List
+                className="activity-details-notes-list"
+                dataSource={selectedNotes}
+                split={false}
+                locale={{ emptyText: "No notes available" }}
+                itemLayout="horizontal"
+                renderItem={(item: any) => (
+                  <List.Item className="activity-details-notes__item">
+                    <List.Item.Meta
+                      className="activity-details-notes__meta"
+                      title={
+                        <div className="note-meta activity-details-notes__byline">
+                          {item.createdBy && (
+                            <span className="note-author">
+                              <UserOutlined />
+                              {item.createdBy}
+                            </span>
+                          )}
+                          {(item.createdAt || item.updatedAt) && (
+                            <span className="note-timestamp">
+                              <ClockCircleOutlined />
+                              {dayjs(item.createdAt || item.updatedAt).format("DD-MM-YYYY")}
+                            </span>
+                          )}
+                        </div>
+                      }
+                      description={
+                        item.text ? (
+                          <div className="activity-details-notes__body">{item.text}</div>
+                        ) : (
+                          <span className="activity-details-notes__empty-text">No note text</span>
+                        )
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            </div>
           </TabPane>
 
           {/* COST TAB */}
           <TabPane tab="Budgetary Cost" key="cost">
-            {costLoading ? (
-              <Spin />
-            ) : activityCost ? (
-              <div style={{ lineHeight: 2 }}>
-                <div>
-                  <strong>Activity Cost:</strong>{" "}
-                  {activityCost.projectCost != null
-                    ? `₹${activityCost.projectCost.toLocaleString("en-IN")}`
-                    : "—"}
-                </div>
-                <div>
-                  <strong>Opportunity Cost:</strong>{" "}
-                  {activityCost.opportunityCost != null
-                    ? `₹${activityCost.opportunityCost.toLocaleString("en-IN")}`
-                    : "—"}
-                </div>
-                {activityCost.updatedAt && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: "#888", float: "right" }}>
-                    Last updated: {dayjs(activityCost.updatedAt).format("DD MMM YYYY HH:mm")}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>No cost information available for this activity.</div>
-            )}
+            <ActivityDetailsCostBody cost={activityCost} loading={costLoading} />
           </TabPane>
 
           {/* RACI TAB */}
@@ -4463,44 +4848,7 @@ export const StatusUpdate = () => {
 
           {/* BUDGET TAB */}
           <TabPane tab="Budget" key="budget">
-            {budgetLoading ? (
-              <Spin />
-            ) : activityBudget ? (
-              <div style={{ lineHeight: 2 }}>
-                <div>
-                  <strong>Budget:</strong>{" "}
-                  {activityBudget.originalBudget != null
-                    ? `₹${activityBudget.originalBudget.toLocaleString("en-IN")}`
-                    : "—"}
-                </div>
-                <div>
-                  <strong>Budgeted On:</strong>{" "}
-                  {activityBudget.originalBudgetDate
-                    ? dayjs(activityBudget.originalBudgetDate).format("DD MMM YYYY")
-                    : "—"}
-                </div>
-                <div>
-                  <strong>Revised Budget:</strong>{" "}
-                  {activityBudget.revisedBudget != null
-                    ? `₹${activityBudget.revisedBudget.toLocaleString("en-IN")}`
-                    : "—"}
-                </div>
-                <div>
-                  <strong>Revised On:</strong>{" "}
-                  {activityBudget.revisionHistory && activityBudget.revisionHistory.length > 0
-                    ? dayjs(
-                      activityBudget.revisionHistory[
-                        activityBudget.revisionHistory.length - 1
-                      ].date
-                    ).format("DD MMM YYYY")
-                    : activityBudget.revisedBudgetDate
-                      ? dayjs(activityBudget.revisedBudgetDate).format("DD MMM YYYY")
-                      : "—"}
-                </div>
-              </div>
-            ) : (
-              <div>No budget information available for this activity.</div>
-            )}
+            <ActivityDetailsBudgetBody budget={activityBudget} loading={budgetLoading} />
           </TabPane>
         </Tabs>
       </Modal>

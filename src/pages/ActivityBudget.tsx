@@ -9,7 +9,9 @@ import {
   Modal,
   Input,
   Tooltip,
-  DatePicker
+  DatePicker,
+  Spin,
+  Empty,
 } from "antd";
 import {
   FileTextOutlined,
@@ -73,7 +75,20 @@ type TableRow = ActivityRow & {
   children?: TableRow[];
 };
 
-const ActivityBudget: React.FC = () => {
+export type ActivityBudgetProps = {
+  /** When set with a project id, load that project and hide the project picker (e.g. Status Update). */
+  presetProjectId?: string | null;
+  /** Compact table: Budget (₹), Budgeted On, Docs only; toolbar holds Edit / Revise / Save. */
+  embedded?: boolean;
+  /** When embedded, show only this activity row (timeline activity `Code`). */
+  restrictToActivityCode?: string | null;
+};
+
+const ActivityBudget: React.FC<ActivityBudgetProps> = ({
+  presetProjectId = null,
+  embedded = false,
+  restrictToActivityCode = null,
+}) => {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [modulesPanels, setModulesPanels] = useState<ModulePanel[]>([]);
@@ -107,16 +122,29 @@ const ActivityBudget: React.FC = () => {
   };
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const all = await db.getProjects();
+      if (cancelled) return;
       setProjects(all || []);
-      if (all && all.length > 0) {
+
+      if (embedded && presetProjectId != null && String(presetProjectId) !== "") {
+        const pid = String(presetProjectId);
+        setSelectedProjectId(pid);
+        await loadModulesForProject(pid);
+        return;
+      }
+
+      if (!embedded && all && all.length > 0) {
         const firstId = String(all[0].id);
         setSelectedProjectId(firstId);
         await loadModulesForProject(firstId);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [embedded, presetProjectId]);
 
   const resetEditing = () => {
     setEditingRowKey(null);
@@ -252,32 +280,57 @@ const ActivityBudget: React.FC = () => {
     return cleaned ? Number(cleaned) : NaN;
   };
 
-  const tableData: TableRow[] = useMemo(
-    () =>
-      modulesPanels.map((panel) => ({
-        key: panel.moduleKey,
-        SrNo: panel.rows[0]?.SrNo ?? "",
-        Code: panel.rows[0]?.Code ?? "",
-        keyActivity: panel.moduleName,
-        plannedStart: "",
-        plannedFinish: "",
-        activityCode: "",
-        activityName: "",
-        originalBudget: null,
-        originalBudgetDate: null,
-        currentBudget: null,
-        currentBudgetDate: null,
-        revisionHistory: [],
-        isModule: true,
+  const tableData: TableRow[] = useMemo(() => {
+    if (embedded) {
+      return [];
+    }
+    return modulesPanels.map((panel) => ({
+      key: panel.moduleKey,
+      SrNo: panel.rows[0]?.SrNo ?? "",
+      Code: panel.rows[0]?.Code ?? "",
+      keyActivity: panel.moduleName,
+      plannedStart: "",
+      plannedFinish: "",
+      activityCode: "",
+      activityName: "",
+      originalBudget: null,
+      originalBudgetDate: null,
+      currentBudget: null,
+      currentBudgetDate: null,
+      revisionHistory: [],
+      isModule: true,
+      moduleName: panel.moduleName,
+      children: panel.rows.map((row) => ({
+        ...row,
+        isModule: false,
         moduleName: panel.moduleName,
-        children: panel.rows.map((row) => ({
-          ...row,
-          isModule: false,
-          moduleName: panel.moduleName,
-        })),
       })),
-    [modulesPanels]
-  );
+    }));
+  }, [modulesPanels, embedded]);
+
+  const embeddedSingleRow: TableRow | null = useMemo(() => {
+    if (!embedded || restrictToActivityCode == null) return null;
+    const code = String(restrictToActivityCode).trim();
+    if (!code) return null;
+    for (const panel of modulesPanels) {
+      const row = panel.rows.find(
+        (r) => String(r.activityCode) === code || String(r.Code ?? "") === code
+      );
+      if (row) {
+        return { ...row, moduleName: panel.moduleName, isModule: false } as TableRow;
+      }
+    }
+    return null;
+  }, [embedded, restrictToActivityCode, modulesPanels]);
+
+  useEffect(() => {
+    if (!embedded) return;
+    if (embeddedSingleRow) {
+      setSelectedActivityRow(embeddedSingleRow);
+    } else if (String(restrictToActivityCode || "").trim()) {
+      setSelectedActivityRow(null);
+    }
+  }, [embedded, embeddedSingleRow, restrictToActivityCode]);
 
   const openHistoryModal = (row: TableRow) => {
     if (row.isModule) return;
@@ -627,43 +680,8 @@ const ActivityBudget: React.FC = () => {
     resetRevision();
   };
 
-  const renderColumns = (): ColumnsType<TableRow> => [
-    {
-      title: "Module Code",
-      dataIndex: "SrNo",
-      key: "SrNo",
-      width: 130,
-    },
-    {
-      title: "Activity Code",
-      dataIndex: "Code",
-      key: "Code",
-      width: 120,
-      render: (value, record) => (record.isModule ? "" : value),
-    },
-    {
-      title: "Activity / Module",
-      dataIndex: "keyActivity",
-      key: "keyActivity",
-      width: 250,
-      render: (text, record) =>
-        record.isModule ? <strong>{text}</strong> : text,
-    },
-    {
-      title: "Planned Start",
-      dataIndex: "plannedStart",
-      key: "plannedStart",
-      width: 120,
-      render: (value, record) => (record.isModule ? "" : value),
-    },
-    {
-      title: "Planned Finish",
-      dataIndex: "plannedFinish",
-      key: "plannedFinish",
-      width: 120,
-      render: (value, record) => (record.isModule ? "" : value),
-    },
-    {
+  const renderColumns = (): ColumnsType<TableRow> => {
+    const budgetColumn: ColumnsType<TableRow>[0] = {
       title: "Budget (₹)",
       key: "currentBudget",
       width: 170,
@@ -710,47 +728,49 @@ const ActivityBudget: React.FC = () => {
               disabled={disabled}
             />
 
-            {hasPersistedBudget ? (
-              hasRevisionHistory ? (
-                <Tooltip title="View revision history">
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<HistoryOutlined />}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      selectActivityRow(row);
-                      openHistoryModal(row);
+            <Space size={2} className="budget-cell-trailing">
+              {hasPersistedBudget ? (
+                hasRevisionHistory ? (
+                  <Tooltip title="View revision history">
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<HistoryOutlined />}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        selectActivityRow(row);
+                        openHistoryModal(row);
+                      }}
+                      className={
+                        isHistoryActive
+                          ? "revision-btn revision-btn--history revision-btn--active"
+                          : "revision-btn revision-btn--history"
+                      }
+                      style={{ paddingInline: 4 }}
+                    />
+                  </Tooltip>
+                ) : (
+                  <span
+                    className="budget-cell-history-placeholder"
+                    style={{
+                      fontSize: 12,
+                      color: "#999",
+                      display: "inline-block",
+                      width: 18,
+                      textAlign: "center",
                     }}
-                    className={
-                      isHistoryActive
-                        ? "revision-btn revision-btn--history revision-btn--active"
-                        : "revision-btn revision-btn--history"
-                    }
-                    style={{ paddingInline: 4 }}
-                  />
-                </Tooltip>
-              ) : (
-                <span
-                  style={{
-                    marginLeft: 6,
-                    fontSize: 12,
-                    color: "#999",
-                    display: "inline-block",
-                    width: 18,
-                    textAlign: "center",
-                  }}
-                >
-                  –
-                </span>
-              )
-            ) : null}
+                  >
+                    –
+                  </span>
+                )
+              ) : null}
+            </Space>
           </div>
-
         );
       },
-    },
-    {
+    };
+
+    const budgetedOnColumn: ColumnsType<TableRow>[0] = {
       title: "Budgeted On",
       key: "budgetedOn",
       width: 140,
@@ -761,63 +781,11 @@ const ActivityBudget: React.FC = () => {
           (row.revisionHistory && row.revisionHistory.length
             ? row.revisionHistory[row.revisionHistory.length - 1].date
             : row.originalBudgetDate);
-        return date ? dayjs(date).format("DD-MM-YYYY HH:mm") : "-";
+        return date ? dayjs(date).format("DD-MM-YYYY") : "-";
       },
-    },
-    // {
-    //   title: "Revision History",
-    //   key: "history",
-    //   width: 120,
-    //   render: (_: any, row: TableRow) => {
-    //     if (row.isModule) return null;
+    };
 
-    //     const hasPersistedBudget =
-    //       (typeof row.originalBudget === "number" && row.originalBudgetDate) ||
-    //       (row.revisionHistory && row.revisionHistory.length > 0);
-
-    //     const hasRevisionHistory =
-    //       row.revisionHistory && row.revisionHistory.length > 0;
-
-    //     const isHistoryActive = historyModalRow?.key === row.key;
-
-    //     if (!hasPersistedBudget) {
-    //       return <span className="revision-cell revision-cell--empty">-</span>;
-    //     }
-
-    //     return (
-    //       <div className="revision-cell">
-    //         {hasRevisionHistory ? (
-    //           <Tooltip title="View revision history">
-    //             <Button
-    //               type="link"
-    //               size="small"
-    //               icon={<HistoryOutlined />}
-    //               onClick={() => openHistoryModal(row)}
-    //               className={
-    //                 isHistoryActive
-    //                   ? "revision-btn revision-btn--history revision-btn--active"
-    //                   : "revision-btn revision-btn--history"
-    //               }
-    //             />
-    //           </Tooltip>
-    //         ) : (
-    //           <span className="revision-cell__placeholder">&nbsp;&nbsp;&nbsp;-&nbsp;&nbsp;&nbsp;</span>
-    //         )}
-
-    //         <Tooltip title="Add revision">
-    //           <Button
-    //             type="link"
-    //             size="small"
-    //             icon={<PlusCircleOutlined />}
-    //             onClick={() => openRevisionModal(row)}
-    //             className="revision-btn revision-btn--add"
-    //           />
-    //         </Tooltip>
-    //       </div>
-    //     );
-    //   },
-    // },
-    {
+    const docsColumn: ColumnsType<TableRow>[0] = {
       title: "Docs",
       key: "docs",
       width: 90,
@@ -836,8 +804,9 @@ const ActivityBudget: React.FC = () => {
             Docs
           </Button>
         ),
-    },
-    {
+    };
+
+    const actionColumn: ColumnsType<TableRow>[0] = {
       title: "Action",
       key: "actions",
       align: "center",
@@ -850,16 +819,19 @@ const ActivityBudget: React.FC = () => {
           (row.revisionHistory && row.revisionHistory.length > 0)
         );
 
-        if (!hasPersistedBudget) return null;
-
         const isEditing = editingRowKey === row.key;
+
+        if (!hasPersistedBudget) {
+          return null;
+        }
 
         if (isEditing) {
           return (
-            <Space>
-              <Tooltip title="Save">
+            <Space size={8} wrap>
+              <Tooltip title="Save budget">
                 <Button
                   type="link"
+                  size="small"
                   icon={<CheckOutlined />}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -872,6 +844,7 @@ const ActivityBudget: React.FC = () => {
               <Tooltip title="Cancel">
                 <Button
                   type="link"
+                  size="small"
                   icon={<CloseOutlined />}
                   onClick={(event) => {
                     event.stopPropagation();
@@ -886,10 +859,11 @@ const ActivityBudget: React.FC = () => {
         }
 
         return (
-          <Space>
+          <Space size={8} wrap>
             <Tooltip title="Edit budget">
               <Button
                 type="link"
+                size="small"
                 icon={<EditOutlined />}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -902,8 +876,50 @@ const ActivityBudget: React.FC = () => {
           </Space>
         );
       },
+    };
+
+    return [
+    {
+      title: "Module Code",
+      dataIndex: "SrNo",
+      key: "SrNo",
+      width: 130,
     },
+    {
+      title: "Activity Code",
+      dataIndex: "Code",
+      key: "Code",
+      width: 120,
+      render: (value, record) => (record.isModule ? "" : value),
+    },
+    {
+      title: "Activity / Module",
+      dataIndex: "keyActivity",
+      key: "keyActivity",
+      width: 250,
+      render: (text, record) =>
+        record.isModule ? <strong>{text}</strong> : text,
+    },
+    {
+      title: "Planned Start",
+      dataIndex: "plannedStart",
+      key: "plannedStart",
+      width: 120,
+      render: (value, record) => (record.isModule ? "" : value),
+    },
+    {
+      title: "Planned Finish",
+      dataIndex: "plannedFinish",
+      key: "plannedFinish",
+      width: 120,
+      render: (value, record) => (record.isModule ? "" : value),
+    },
+    budgetColumn,
+    budgetedOnColumn,
+    docsColumn,
+    actionColumn,
   ];
+  };
 
   const handleSaveAll = async () => {
     if (!selectedProjectId) return;
@@ -1124,109 +1140,292 @@ const ActivityBudget: React.FC = () => {
     return rows;
   }, [historyModalRow]);
 
-  return (
-    <div className="budget-main-container">
-      <div className="budget-heading budget-heading--top">
-        <div className="budget-heading-left">
-          <p className="page-heading-title">Activity Budget</p>
-            <span className="pl-subtitle">Set and revise activity budgets module-wise</span>
+  const renderEmbeddedBudgetFields = () => {
+    if (!embeddedSingleRow) return null;
+    const row = embeddedSingleRow;
+    const hasPersistedBudget = Boolean(
+      (typeof row.originalBudget === "number" && row.originalBudgetDate) ||
+        (row.revisionHistory && row.revisionHistory.length > 0)
+    );
+    const hasRevisionHistory = Boolean(row.revisionHistory && row.revisionHistory.length > 0);
+    const isEditing = editingRowKey === row.key;
+    const disabled = hasPersistedBudget && !isEditing;
+    const isHistoryActive = historyModalRow?.key === row.key;
+    const budgetedOnDate =
+      row.currentBudgetDate ||
+      (row.revisionHistory && row.revisionHistory.length
+        ? row.revisionHistory[row.revisionHistory.length - 1].date
+        : row.originalBudgetDate);
+
+    return (
+      <div className="budget-embedded-form-card">
+        <div className="budget-embedded-form__header budget-embedded-form__header--with-action">
+          <div className="budget-embedded-form__header-main">
+            <Text className="budget-embedded-form__title">{row.keyActivity}</Text>
+            <Text type="secondary" className="budget-embedded-form__subtitle">
+              {row.moduleName ? `${row.moduleName} · ` : ""}
+              Code {row.activityCode || row.Code || "—"}
+            </Text>
+          </div>
+          <Button
+            type="primary"
+            size="middle"
+            onClick={() => openRevisionModal(row)}
+            className="budget-embedded-revise-btn budget-embedded-revise-btn--in-header"
+          >
+            Add revision
+          </Button>
         </div>
-
-        <div className="budget-heading-right">
-          <div className="budget-field">
-            <div className="budget-field-label">Project</div>
-            <Select
-              value={selectedProjectId ?? undefined}
-              onChange={handleProjectChange}
-              className="budget-field-control"
-            >
-              {projects.map((p) => (
-                <Option key={p.id} value={String(p.id)}>
-                  {p.projectParameters?.projectName || p.name}
-                </Option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="budget-field">
-            <div className="budget-field-label">Version</div>
-            <div className="budget-field-value">
-              {timelineInfo ? timelineInfo.version : "-"}
+        <div className="budget-embedded-form">
+          <div className="budget-embedded-form__row budget-embedded-form__row--align-start">
+            <div className="budget-embedded-form__label">Budget (₹)</div>
+            <div className="budget-embedded-form__field budget-embedded-form__field--budget">
+              <div className="budget-embedded-form__budget-line">
+                <div className="budget-embedded-form__budget-input-wrap">
+                  <InputNumber<number>
+                    className={isEditing ? "budget-input budget-input--editing" : "budget-input"}
+                    min={0}
+                    precision={0}
+                    parser={numericParser}
+                    value={row.currentBudget ?? undefined}
+                    onChange={(v) => handleBudgetChange(row.key, v ?? null)}
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="budget-embedded-form__budget-actions">
+                  {hasPersistedBudget ? (
+                    hasRevisionHistory ? (
+                      <Tooltip title="View revision history">
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<HistoryOutlined />}
+                          onClick={() => {
+                            selectActivityRow(row);
+                            openHistoryModal(row);
+                          }}
+                          className={
+                            isHistoryActive
+                              ? "revision-btn revision-btn--history revision-btn--active"
+                              : "revision-btn revision-btn--history"
+                          }
+                        />
+                      </Tooltip>
+                    ) : (
+                      <span className="budget-embedded-form__dash">–</span>
+                    )
+                  ) : null}
+                  {isEditing ? (
+                    <Space size={4}>
+                      <Tooltip title="Save budget">
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<CheckOutlined />}
+                          onClick={() => {
+                            selectActivityRow(row);
+                            void saveEdit();
+                          }}
+                          className="budget-action-btn budget-action-btn--save budget-action-btn--active"
+                        />
+                      </Tooltip>
+                      <Tooltip title="Cancel">
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<CloseOutlined />}
+                          onClick={() => {
+                            selectActivityRow(row);
+                            cancelEdit();
+                          }}
+                          className="budget-action-btn budget-action-btn--cancel budget-action-btn--active"
+                        />
+                      </Tooltip>
+                    </Space>
+                  ) : hasPersistedBudget ? (
+                    <Tooltip title="Edit budget">
+                      <Button
+                        type="link"
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => {
+                          selectActivityRow(row);
+                          startEdit(row);
+                        }}
+                        className="budget-action-btn budget-action-btn--edit"
+                      />
+                    </Tooltip>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
-
-          <div className="budget-field">
-            <div className="budget-field-label">Status</div>
-            <div className="budget-field-value">
-              {timelineInfo ? timelineInfo.status : "-"}
-            </div>
-          </div>
-
-          <div className="budget-field">
-            <div className="budget-field-label">Updated At</div>
-            <div className="budget-field-value">
-              {timelineInfo ? dayjs(timelineInfo.updatedAt).format("DD-MM-YYYY HH:mm") : "-"}
-            </div>
-          </div>
-
-          <div className="budget-field budget-field--button">
-            <Button
-              size="middle"
-              type="primary"
-              icon={<PlusCircleOutlined />}
-              disabled={!selectedActivityRow}
-              onClick={() => {
-                if (!selectedActivityRow) {
-                  notify.error("Please select an activity row first.");
-                  return;
+          <div className="budget-embedded-form__row">
+            <div className="budget-embedded-form__label">Budgeted on</div>
+            <div className="budget-embedded-form__field">
+              <Input
+                disabled
+                className="budget-embedded-form__budgeted-on-input"
+                value={
+                  budgetedOnDate ? dayjs(budgetedOnDate).format("DD-MM-YYYY") : "—"
                 }
-                openRevisionModal(selectedActivityRow);
-              }}
-              className="budget-add-revision-btn"
-            >
-              Add Revision
-            </Button>
+              />
+            </div>
+          </div>
+          <div className="budget-embedded-form__row">
+            <div className="budget-embedded-form__label">Docs</div>
+            <div className="budget-embedded-form__field">
+              <Button
+                type="link"
+                size="small"
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  selectActivityRow(row);
+                  openDocsModal(row);
+                }}
+                className="budget-embedded-form__docs-btn"
+              >
+                Open documents
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-      
-      <div className="budget-table-container">
-        <Table<TableRow>
-          columns={renderColumns()}
-          dataSource={tableData}
-          rowKey="key"
-          pagination={false}
-          bordered
-          loading={loading}
-          size="small"
-          expandable={{
-            expandedRowKeys: expandedKeys,
-            onExpand: (expanded, record) => {
-              setExpandedKeys((prev) =>
-                expanded ? [...prev, record.key] : prev.filter((k) => k !== record.key)
-              );
-            },
-            rowExpandable: (record: any) => record.isModule && !!record.children?.length,
-          }}
-          rowClassName={(record) =>
-            record.isModule
-              ? "module-header"
-              : record.key === selectedActivityRow?.key
-                ? "activity-row activity-row--selected"
-                : "activity-row"
-          }
-          onRow={(record) => ({
-            onClick: () => {
-              if (record.isModule) return;
-              selectActivityRow(record);
-            },
-          })}
-          scroll={{ x: true, y: "calc(100vh - 260px)" }}
-          className="budget-table"
-        />
-      </div>
+    );
+  };
 
-      <div className="budget-footer">
+  const embeddedHasRestrict = embedded && String(restrictToActivityCode || "").trim() !== "";
+
+  return (
+    <div className={embedded ? "budget-main-container budget-main-container--embedded" : "budget-main-container"}>
+      {embedded ? (
+        <div className="budget-embedded-stack">
+          {embeddedHasRestrict ? (
+            <div className="budget-embedded-form-wrap">
+              {loading ? (
+                <div className="budget-embedded-form-loading">
+                  <Spin />
+                </div>
+              ) : !embeddedSingleRow ? (
+                <Empty description="No budget row for this activity." />
+              ) : (
+                renderEmbeddedBudgetFields()
+              )}
+            </div>
+          ) : (
+            <div className="budget-embedded-form-wrap">
+              <Empty description="Select an activity on the timeline first." />
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="budget-heading budget-heading--top">
+            <div className="budget-heading-left">
+              <p className="page-heading-title">Activity Budget</p>
+              <span className="pl-subtitle">Set and revise activity budgets module-wise</span>
+            </div>
+
+            <div className="budget-heading-right">
+              <div className="budget-field">
+                <div className="budget-field-label">Project</div>
+                <Select
+                  value={selectedProjectId ?? undefined}
+                  onChange={handleProjectChange}
+                  className="budget-field-control"
+                >
+                  {projects.map((p) => (
+                    <Option key={p.id} value={String(p.id)}>
+                      {p.projectParameters?.projectName || p.name}
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="budget-field">
+                <div className="budget-field-label">Version</div>
+                <div className="budget-field-value">
+                  {timelineInfo ? timelineInfo.version : "-"}
+                </div>
+              </div>
+
+              <div className="budget-field">
+                <div className="budget-field-label">Status</div>
+                <div className="budget-field-value">
+                  {timelineInfo ? timelineInfo.status : "-"}
+                </div>
+              </div>
+
+              <div className="budget-field">
+                <div className="budget-field-label">Updated At</div>
+                <div className="budget-field-value">
+                  {timelineInfo ? dayjs(timelineInfo.updatedAt).format("DD-MM-YYYY") : "-"}
+                </div>
+              </div>
+
+              <div className="budget-field budget-field--button">
+                <Button
+                  size="middle"
+                  type="primary"
+                  icon={<PlusCircleOutlined />}
+                  disabled={!selectedActivityRow}
+                  onClick={() => {
+                    if (!selectedActivityRow) {
+                      notify.error("Please select an activity row first.");
+                      return;
+                    }
+                    openRevisionModal(selectedActivityRow);
+                  }}
+                  className="budget-add-revision-btn"
+                >
+                  Add Revision
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="budget-table-container">
+            <Table<TableRow>
+              columns={renderColumns()}
+              dataSource={tableData}
+              rowKey="key"
+              pagination={false}
+              bordered
+              loading={loading}
+              size="small"
+              expandable={{
+                expandedRowKeys: expandedKeys,
+                onExpand: (expanded, record) => {
+                  setExpandedKeys((prev) =>
+                    expanded ? [...prev, record.key] : prev.filter((k) => k !== record.key)
+                  );
+                },
+                rowExpandable: (record: any) => record.isModule && !!record.children?.length,
+              }}
+              rowClassName={(record) =>
+                record.isModule
+                  ? "module-header"
+                  : record.key === selectedActivityRow?.key
+                    ? "activity-row activity-row--selected"
+                    : "activity-row"
+              }
+              onRow={(record) => ({
+                onClick: () => {
+                  if (record.isModule) return;
+                  selectActivityRow(record);
+                },
+              })}
+              scroll={{
+                x: true,
+                y: "calc(100vh - 260px)",
+              }}
+              className="budget-table"
+            />
+          </div>
+        </>
+      )}
+
+      <div className={embedded ? "budget-footer budget-footer--embedded" : "budget-footer"}>
         <Button
           type="primary"
           className="save-button"
@@ -1264,7 +1463,7 @@ const ActivityBudget: React.FC = () => {
                 dataIndex: "uploadedAt",
                 key: "uploadedAt",
                 width: 160,
-                render: (val: string) => (val ? dayjs(val).format("DD-MM-YYYY HH:mm") : "-"),
+                render: (val: string) => (val ? dayjs(val).format("DD-MM-YYYY") : "-"),
               },
               {
                 title: "Uploaded By",
@@ -1426,7 +1625,7 @@ const ActivityBudget: React.FC = () => {
                   title: "Date",
                   dataIndex: "date",
                   key: "date",
-                  render: (val: string | null) => (val ? dayjs(val).format("DD-MM-YYYY HH:mm") : "-"),
+                  render: (val: string | null) => (val ? dayjs(val).format("DD-MM-YYYY") : "-"),
                 },
               ]}
             />

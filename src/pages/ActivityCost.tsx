@@ -33,13 +33,22 @@ interface ModulePanel {
   rows: ActivityRow[];
 }
 
+export type ActivityCostPageProps = {
+  presetProjectId?: string | null;
+  /** Hide title row and project picker (e.g. inside Status Update modal). */
+  embedded?: boolean;
+};
+
 const parseCostValue = (value: unknown): number | null => {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const ActivityCost: React.FC = () => {
+const ActivityCost: React.FC<ActivityCostPageProps> = ({
+  presetProjectId = null,
+  embedded = false,
+}) => {
   const [projects, setProjects] = useState<any[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [modulesPanels, setModulesPanels] = useState<ModulePanel[]>([]);
@@ -48,16 +57,29 @@ const ActivityCost: React.FC = () => {
   const [savingAll, setSavingAll] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       const all = await db.getProjects();
+      if (cancelled) return;
       setProjects(all || []);
-      if (all && all.length > 0) {
+
+      if (embedded && presetProjectId != null && String(presetProjectId) !== "") {
+        const pid = String(presetProjectId);
+        setSelectedProjectId(pid);
+        await loadModulesForProject(pid);
+        return;
+      }
+
+      if (!embedded && all && all.length > 0) {
         const firstId = String(all[0].id);
         setSelectedProjectId(firstId);
         await loadModulesForProject(firstId);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [embedded, presetProjectId]);
 
   useEffect(() => {
     setExpandedKeys(modulesPanels.map((p) => p.moduleKey));
@@ -343,33 +365,35 @@ const ActivityCost: React.FC = () => {
 
   return (
     <>
-      <div className="activity-cost-heading">
-        <div className="activity-cost-heading-inner">
-          <div>
-            <p className="page-heading-title">Activity Cost Builder</p>
-            <span className="pl-subtitle">Manage project activity costs module-wise</span>
+      {!embedded ? (
+        <div className="activity-cost-heading">
+          <div className="activity-cost-heading-inner">
+            <div>
+              <p className="page-heading-title">Activity Cost Builder</p>
+              <span className="pl-subtitle">Manage project activity costs module-wise</span>
+            </div>
+
+            <Space size={10} align="center">
+              <Text className="activity-cost-label">Select Project:</Text>
+              <Select
+                className="activity-cost-project-select"
+                value={selectedProjectId ?? undefined}
+                onChange={handleProjectChange}
+                showSearch
+                optionFilterProp="children"
+              >
+                {projects.map((p) => (
+                  <Option key={p.id} value={String(p.id)}>
+                    {p.projectParameters?.projectName || p.name || `Project ${p.id}`}
+                  </Option>
+                ))}
+              </Select>
+            </Space>
           </div>
-
-          <Space size={10} align="center">
-            <Text className="activity-cost-label">Select Project:</Text>
-            <Select
-              className="activity-cost-project-select"
-              value={selectedProjectId ?? undefined}
-              onChange={handleProjectChange}
-              showSearch
-              optionFilterProp="children"
-            >
-              {projects.map((p) => (
-                <Option key={p.id} value={String(p.id)}>
-                  {p.projectParameters?.projectName || p.name || `Project ${p.id}`}
-                </Option>
-              ))}
-            </Select>
-          </Space>
         </div>
-      </div>
+      ) : null}
 
-      <div className="activity-cost-main">
+      <div className={embedded ? "activity-cost-main activity-cost-main--embedded" : "activity-cost-main"}>
         <div className="activity-cost-content">
           {loading && modulesPanels.length === 0 ? (
             <div className="activity-cost-loading">
@@ -394,13 +418,16 @@ const ActivityCost: React.FC = () => {
                   expandIconColumnIndex: 0,
                 }}
                 rowClassName={(record: any) => (record.isModule ? "activity-module-header-row" : "activity-row")}
-                scroll={{ x: "max-content", y: "calc(100vh - 300px)" }}
+                scroll={{
+                  x: "max-content",
+                  y: embedded ? 400 : "calc(100vh - 300px)",
+                }}
                 className="activity-cost-table"
               />
             </div>
           )}
         </div>
-        <div className="save-btn">
+        <div className={embedded ? "save-btn save-btn--embedded" : "save-btn"}>
           <Button
             type="primary"
             className="save-button"
