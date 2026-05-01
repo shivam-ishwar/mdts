@@ -164,9 +164,10 @@ const ProjectsList = () => {
         key: "actions",
         render: (_: any, record: ProjectData) => {
           const hasTimeline = record.projectTimeline && record.projectTimeline.length > 0;
-          const isOwner = record.userGuiId === currentUser?.guiId;
+          const currentUserGuiId = currentUser?.guiId ?? currentUser?.userGuiId;
+          const isOwner = record.userGuiId === currentUserGuiId;
           const canEdit = isOwner;
-          const canDelete = isOwner && !hasTimeline;
+          const canDelete = isOwner;
 
           return (
             <div className="pl-actions">
@@ -191,8 +192,6 @@ const ProjectsList = () => {
                 title={
                   !isOwner
                     ? "You are not the owner of this project"
-                    : hasTimeline
-                    ? "Timeline created - deletion not allowed"
                     : "Delete project"
                 }
               >

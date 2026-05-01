@@ -7,8 +7,8 @@ import { AppsRounded, FolderOpenOutlined, SaveOutlined } from "@mui/icons-materi
 import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
-import { Button, Select, Modal, Input, InputNumber, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover, Switch, Checkbox, Divider } from "antd";
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, ExclamationCircleOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FilterOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button, Select, Modal, Input, InputNumber, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover, Switch, Checkbox } from "antd";
+import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FilterOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUser } from '../Utils/moduleStorage';
@@ -142,6 +142,7 @@ export const StatusUpdate = () => {
   const [activityCost, setActivityCost] = useState<ActivityCost | null>(null);
   const [costLoading, setCostLoading] = useState(false);
   const [isActionsPopoverOpen, setIsActionsPopoverOpen] = useState(false);
+  const [isReadinessPopoverOpen, setIsReadinessPopoverOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [activityDetailsVisible, setActivityDetailsVisible] = useState(false);
   const [standardizationGroupRecords, setStandardizationGroupRecords] = useState<any[]>([]);
@@ -274,6 +275,84 @@ export const StatusUpdate = () => {
     filteredDataSource,
     dataSource,
   ]);
+
+  const hasReadinessFilters =
+    readinessFilterBudget || readinessFilterCommercial || readinessFilterCost;
+  const readinessFilterCount = [
+    readinessFilterBudget,
+    readinessFilterCommercial,
+    readinessFilterCost,
+  ].filter(Boolean).length;
+
+  const readinessFilterContent = (
+    <div className="status-readiness-popover-panel" aria-label="Activity readiness filters">
+      <div className="status-readiness-toolbar-inner">
+        <div className="status-readiness-header">
+          <div className="status-readiness-header-main">
+            <span className="status-readiness-title">
+              <FilterOutlined aria-hidden />
+              Readiness filters
+            </span>
+            {hasReadinessFilters ? (
+              <span className="status-readiness-count">{readinessFilterCount} active</span>
+            ) : null}
+          </div>
+          <div className="status-readiness-header-meta">
+            {readinessLoading ? (
+              <Spin size="small" className="status-readiness-spin" />
+            ) : null}
+            <Button
+              type="link"
+              size="small"
+              className="status-readiness-clear"
+              disabled={!hasReadinessFilters}
+              onClick={() => {
+                setReadinessFilterBudget(false);
+                setReadinessFilterCommercial(false);
+                setReadinessFilterCost(false);
+              }}
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+        <div className="status-readiness-checks">
+          <Tooltip title="Show activities that have an activity budget saved for this project">
+            <Checkbox
+              checked={readinessFilterBudget}
+              onChange={(e) => setReadinessFilterBudget(e.target.checked)}
+              className="status-readiness-check"
+            >
+              Budget captured
+            </Checkbox>
+          </Tooltip>
+          <Tooltip title="Show activities marked as commercial activity undertaken">
+            <Checkbox
+              checked={readinessFilterCommercial}
+              onChange={(e) => setReadinessFilterCommercial(e.target.checked)}
+              className="status-readiness-check"
+            >
+              Commercial planned
+            </Checkbox>
+          </Tooltip>
+          <Tooltip title="Show activities with project cost or opportunity code saved in Budgetary cost">
+            <Checkbox
+              checked={readinessFilterCost}
+              onChange={(e) => setReadinessFilterCost(e.target.checked)}
+              className="status-readiness-check"
+            >
+              Activity cost defined
+            </Checkbox>
+          </Tooltip>
+        </div>
+      </div>
+      {hasReadinessFilters && (
+        <Typography.Text type="secondary" className="status-readiness-hint">
+          Filters combine together.
+        </Typography.Text>
+      )}
+    </div>
+  );
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -3723,72 +3802,26 @@ export const StatusUpdate = () => {
                 />
               </Tooltip>
             </Popover>
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              overlayClassName="status-readiness-popover"
+              open={isReadinessPopoverOpen}
+              onOpenChange={setIsReadinessPopoverOpen}
+              content={readinessFilterContent}
+            >
+              <Tooltip title="Filter activities by readiness details">
+                <Button
+                  type="default"
+                  icon={<FilterOutlined />}
+                  className={`project-timeline-btn status-actions-trigger status-actions-trigger-filter${hasReadinessFilters ? " status-actions-trigger-filter-active" : ""}`}
+                  aria-label="Open readiness filters"
+                />
+              </Tooltip>
+            </Popover>
           </div>
         )}
       </div>
-
-      {selectedProjectId &&
-        dataSource.length > 0 &&
-        selectedProject?.projectTimeline != null && (
-          <div className="status-readiness-toolbar" aria-label="Activity readiness filters">
-            <div className="status-readiness-toolbar-inner">
-              <span className="status-readiness-title">
-                <FilterOutlined aria-hidden />
-                Readiness filters
-                {readinessLoading ? (
-                  <Spin size="small" className="status-readiness-spin" />
-                ) : null}
-              </span>
-              <Divider type="vertical" className="status-readiness-divider" />
-              <Space size={[12, 8]} wrap className="status-readiness-checks">
-                <Tooltip title="Show activities that have an activity budget saved for this project">
-                  <Checkbox
-                    checked={readinessFilterBudget}
-                    onChange={(e) => setReadinessFilterBudget(e.target.checked)}
-                  >
-                    Budget captured
-                  </Checkbox>
-                </Tooltip>
-                <Tooltip title="Show activities marked as commercial activity undertaken">
-                  <Checkbox
-                    checked={readinessFilterCommercial}
-                    onChange={(e) => setReadinessFilterCommercial(e.target.checked)}
-                  >
-                    Commercial planned
-                  </Checkbox>
-                </Tooltip>
-                <Tooltip title="Show activities with project cost or opportunity code saved in Budgetary cost">
-                  <Checkbox
-                    checked={readinessFilterCost}
-                    onChange={(e) => setReadinessFilterCost(e.target.checked)}
-                  >
-                    Activity cost defined
-                  </Checkbox>
-                </Tooltip>
-              </Space>
-              <Button
-                type="link"
-                size="small"
-                className="status-readiness-clear"
-                disabled={
-                  !readinessFilterBudget && !readinessFilterCommercial && !readinessFilterCost
-                }
-                onClick={() => {
-                  setReadinessFilterBudget(false);
-                  setReadinessFilterCommercial(false);
-                  setReadinessFilterCost(false);
-                }}
-              >
-                Clear
-              </Button>
-            </div>
-            {(readinessFilterBudget || readinessFilterCommercial || readinessFilterCost) && (
-              <Typography.Text type="secondary" className="status-readiness-hint">
-                Multiple selections apply together (activities must match every checked filter).
-              </Typography.Text>
-            )}
-          </div>
-        )}
 
       <hr />
     </>

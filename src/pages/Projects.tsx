@@ -363,9 +363,9 @@ const Projects = () => {
     };
 
     const menu = (project: any) => {
-        const hasTimeline = project.projectTimeline && project.projectTimeline.length > 0;
-        const isOwner = project.userGuiId === currentUser?.userGuiId;
-        const canDelete = isOwner && !hasTimeline;
+        const currentUserGuiId = currentUser?.guiId ?? currentUser?.userGuiId;
+        const isOwner = project.userGuiId === currentUserGuiId;
+        const canDelete = isOwner;
 
         return (
             <Menu
@@ -393,7 +393,7 @@ const Projects = () => {
                         if (canDelete) {
                             showDeleteModal(project);
                         } else {
-                            notify.error(!isOwner ? "You are not the owner of this project" : "Timeline created - deletion not allowed");
+                            notify.error("You are not the owner of this project");
                         }
                     }}
                 >
