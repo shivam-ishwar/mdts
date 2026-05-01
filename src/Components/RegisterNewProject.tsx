@@ -45,7 +45,7 @@ export const RegisterNewProject: React.FC = () => {
     { id: 2, title: "Locations" },
     { id: 3, title: "Contractual Details" },
     { id: 4, title: "Financial Parameters" },
-    { id: 5, title: "MOC Efficiency Parameters" },
+    { id: 5, title: "MOC Efficiency" },
   ];
 
   const [formStepsData, setFormStepsData] = useState<any[]>(() => {

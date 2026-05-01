@@ -160,6 +160,7 @@ export default function EDPP({ code }: EDPPProps) {
     const l = projectDetails?.locations || {};
     const c = projectDetails?.contractualDetails || {};
     const f = projectDetails?.financialParameters || {};
+    const m = projectDetails?.mocEfficiencyParameters || {};
     return [
       {
         title: "Project Details",
@@ -210,6 +211,18 @@ export default function EDPP({ code }: EDPPProps) {
           { label: "PAT / Ton", value: displayWithUnit((f as any).patPerTon, "/ton", "₹") },
           { label: "ROE", value: displayWithUnit((f as any).roePercentage, "%") },
           { label: "ROCE", value: displayWithUnit((f as any).rocePercentage, "%") },
+        ],
+      },
+      {
+        title: "MOC Efficiency",
+        entries: [
+          { label: "Target MOC Efficiency", value: displayWithUnit((m as any).targetOverallMocEfficiency, "%") },
+          { label: "Baseline Efficiency", value: displayWithUnit((m as any).baselineMocEfficiency, "%") },
+          { label: "Annual Improvement", value: displayWithUnit((m as any).plannedAnnualImprovement, "%") },
+          { label: "Equipment Availability", value: displayWithUnit((m as any).equipmentAvailabilityTarget, "%") },
+          { label: "Energy Benchmark", value: displayWithUnit((m as any).energyUseBenchmark, "kWh/t") },
+          { label: "Measurement Cycle", value: displayValue((m as any).measurementFrequency) },
+          { label: "Notes", value: displayValue((m as any).mocRemarks) },
         ],
       },
     ] as Array<{ title: string; entries: Array<{ label: string; value: string }> }>;

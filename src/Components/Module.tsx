@@ -36,6 +36,7 @@ const Module = () => {
     const [selectedOption, setSelectedOption] = useState<string>("");
     const [options, setOptions] = useState<any[]>([]);
     const [mineTypePopupOpen, setMineTypePopupOpen] = useState<boolean>(false);
+    const [mineTypeManagerOpen, setMineTypeManagerOpen] = useState<boolean>(false);
     const [newMineType, setNewMineType] = useState<string>("");
     const [shorthandCode, setShorthandCode] = useState<string>("");
     const [isEditingShorthand, setIsEditingShorthand] = useState<boolean>(false);
@@ -560,6 +561,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
     const handleOpenAddMineType = () => {
         resetMineTypeForm();
+        setMineTypeManagerOpen(false);
         setMineTypePopupOpen(true);
     };
 
@@ -568,6 +570,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setNewMineType(option.description || "");
         setShorthandCode(option.type || "");
         setIsEditingShorthand(false);
+        setMineTypeManagerOpen(false);
         setMineTypePopupOpen(true);
     };
 
@@ -1653,57 +1656,20 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                             label={option.type}
                                                             title={option.description || option.type}
                                                         >
-                                                            <div
-                                                                style={{
-                                                                    display: "flex",
-                                                                    alignItems: "center",
-                                                                    justifyContent: "space-between",
-                                                                    gap: "8px",
-                                                                }}
-                                                            >
-                                                                <Tooltip title={option.description || option.type} placement="right">
-                                                                    <span style={{ flex: 1, minWidth: 0 }}>{option.type}</span>
-                                                                </Tooltip>
-                                                                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                                                                    <Button
-                                                                        type="text"
-                                                                        size="small"
-                                                                        icon={<EditOutlined />}
-                                                                        onMouseDown={(e) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                        }}
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                            handleOpenEditMineType(option);
-                                                                        }}
-                                                                    />
-                                                                    <Button
-                                                                        type="text"
-                                                                        size="small"
-                                                                        danger
-                                                                        icon={<DeleteOutlined />}
-                                                                        onMouseDown={(e) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                        }}
-                                                                        onClick={(e) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                            handleDeleteMineType(option);
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                            </div>
+                                                            <Tooltip title={option.description || option.type} placement="right">
+                                                                <span>{option.type}</span>
+                                                            </Tooltip>
                                                         </Select.Option>
                                                     ))}
                                                 </Select>
-                                                <Button
-                                                    type="dashed"
-                                                    icon={<PlusOutlined />}
-                                                    onClick={handleOpenAddMineType}
-                                                />
+                                                <div className="module-mine-type-actions">
+                                                    <Button
+                                                        className="module-mine-type-manage-btn"
+                                                        onClick={() => setMineTypeManagerOpen(true)}
+                                                    >
+                                                        Manage
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </Col>
                                     </Row>
@@ -1916,6 +1882,69 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                             </Row>
                         </Form>
 
+                    </div>
+                </Modal>
+
+                <Modal
+                    title="Manage Mine Types"
+                    open={mineTypeManagerOpen}
+                    onCancel={() => setMineTypeManagerOpen(false)}
+                    footer={null}
+                    width={560}
+                    className="modal-container"
+                >
+                    <div className="module-mine-type-manager">
+                        <div className="module-mine-type-manager-topbar">
+                            <Typography.Text type="secondary">
+                                Edit or remove mine types from one dedicated place.
+                            </Typography.Text>
+                            <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenAddMineType}>
+                                Add Mine Type
+                            </Button>
+                        </div>
+
+                        <div className="module-mine-type-manager-list">
+                            {options.length > 0 ? (
+                                options.map((option: any) => (
+                                    <div key={option.id ?? option.type} className="module-mine-type-manager-row">
+                                        <div className="module-mine-type-manager-copy">
+                                            <div className="module-mine-type-manager-code">{option.type || "-"}</div>
+                                            <div className="module-mine-type-manager-text">
+                                                <div className="module-mine-type-manager-name">
+                                                    {option.description || option.type || "-"}
+                                                </div>
+                                                {option.description && option.description !== option.type ? (
+                                                    <div className="module-mine-type-manager-meta">
+                                                        Shorthand: {option.type}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <div className="module-mine-type-manager-actions">
+                                            <Tooltip title="Edit mine type">
+                                                <Button
+                                                    type="text"
+                                                    icon={<EditOutlined />}
+                                                    onClick={() => handleOpenEditMineType(option)}
+                                                />
+                                            </Tooltip>
+                                            <Tooltip title="Delete mine type">
+                                                <Button
+                                                    type="text"
+                                                    danger
+                                                    icon={<DeleteOutlined />}
+                                                    onClick={() => handleDeleteMineType(option)}
+                                                />
+                                            </Tooltip>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="module-mine-type-manager-empty">
+                                    No mine types available yet.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </Modal>
 
