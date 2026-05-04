@@ -48,6 +48,7 @@ const initialNavLinks: any[] = [
         subItems: [
             { label: "Register New Project", action: "/create/register-new-project", requiredPermission: "CREATE_PROJECT" },
             { label: "Modules", action: "/modules", requiredPermission: "CREATE_MODULE" },
+            { label: "MDTS Modules", action: "/create/mdts-modules", requiredPermission: "CREATE_MODULE" },
             { label: "Timeline Builder", action: "/create/timeline-builder", requiredPermission: "BUILD_TIMEBUILDER" },
             { label: "Status Update", action: "/create/status-update", requiredPermission: "UPDATE_STATUS" },
             { label: "Standardization Links", action: "/create/standardization-links", requiredPermission: "UPDATE_STATUS" },

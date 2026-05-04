@@ -1353,7 +1353,7 @@ const TimeBuilder = () => {
         dataIndex: "controllabilityFactor",
         key: "controllabilityFactor",
         align: "center",
-        render: (value: string, record: any) => {
+        render: (value: string) => {
           if (!value) return <span style={{ color: "#8c8c8c" }}>Not Set</span>;
           const colorMap: Record<string, string> = {
             High: "#cf1322",

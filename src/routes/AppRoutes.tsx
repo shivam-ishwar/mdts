@@ -14,6 +14,7 @@ import { EmployeeRegistration } from "../Components/EmployeeRegistration";
 import { HolidayCalender } from "../Components/HolidayCalender";
 import ManageUser from "../Components/ManageUser";
 import ModuleLibrary from "../Components/ModuleLibrary";
+import MDTSModules from "../Components/MDTSModules";
 import NotificationLibrary from "../Components/NotificationLibrary";
 import { RegisterNewProject } from "../Components/RegisterNewProject";
 import StatusUpdate from "../Components/StatusUpdate";
@@ -149,6 +150,15 @@ const AppRoutes = () => {
                         element={
                             <ProtectedRoute action="CREATE_MODULE">
                                 <ModuleLibrary />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/create/mdts-modules"
+                        element={
+                            <ProtectedRoute action="CREATE_MODULE">
+                                <MDTSModules />
                             </ProtectedRoute>
                         }
                     />

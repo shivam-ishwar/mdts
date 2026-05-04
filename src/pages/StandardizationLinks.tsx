@@ -32,7 +32,6 @@ export default function StandardizationLinks() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingMaster, setEditingMaster] = useState<StandardizationMaster | null>(null);
   const [savingMaster, setSavingMaster] = useState(false);
-  const [deletingKey, setDeletingKey] = useState<string | null>(null);
   const [deletingMasterId, setDeletingMasterId] = useState<number | null>(null);
 
   const loadData = async () => {
@@ -179,36 +178,6 @@ export default function StandardizationLinks() {
             }
           },
         });
-      },
-    });
-  };
-
-  const handleDeleteLinkedActivity = (item: StandardizedActivity) => {
-    Modal.confirm({
-      title: "Delete this linked activity?",
-      content: `${item.activityName || "Activity"} will be removed from this standardization.`,
-      okText: "Delete",
-      cancelText: "Cancel",
-      okButtonProps: { danger: true },
-      centered: true,
-      className: "modal-container",
-      onOk: async () => {
-        try {
-          const key = makeActivityKey(item);
-          setDeletingKey(key);
-          await db.deleteStandardizedActivity(
-            String(item.orgId || currentUser?.orgId || ""),
-            String(item.moduleCode || ""),
-            String(item.activityCode || "")
-          );
-          notify.success("Linked activity deleted.");
-          await loadData();
-        } catch (error) {
-          console.error("Failed to delete linked activity", error);
-          notify.error("Unable to delete linked activity.");
-        } finally {
-          setDeletingKey(null);
-        }
       },
     });
   };

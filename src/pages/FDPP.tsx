@@ -44,6 +44,7 @@ type ProjectDetails = {
   locations?: Record<string, unknown>;
   contractualDetails?: Record<string, unknown>;
   financialParameters?: Record<string, unknown>;
+  mocEfficiencyParameters?: Record<string, unknown>;
   documents?: ProjectDocument[];
   initialStatus?: {
     library?: unknown;

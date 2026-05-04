@@ -58,7 +58,7 @@ interface ManageUserProps {
 
 const ManageUser: React.FC<ManageUserProps> = ({ options }) => {
   const [_modules, setModules] = useState<Module[]>([]);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUser, _setSelectedUser] = useState<User | null>(null);
   const [openAlertModal, setOpenAlertModal] = useState(false);
   const [openRACIModal, setOpenRACIModal] = useState(false);
   const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);

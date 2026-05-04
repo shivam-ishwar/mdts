@@ -5,9 +5,8 @@ import { Paper, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/ma
 import { useNavigate } from 'react-router-dom';
 import "../styles/module.css"
 import { Input, Button, Tooltip, Row, Col, Typography, Modal, Select, Radio, Form, Switch } from 'antd';
-import { SearchOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, UserOutlined, BellOutlined, PlusOutlined, CloseCircleOutlined, ExclamationCircleOutlined, DollarOutlined, MinusCircleOutlined, FileTextOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
+import { SearchOutlined, ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, BellOutlined, PlusOutlined, CloseCircleOutlined, ExclamationCircleOutlined, MinusCircleOutlined, FileTextOutlined, EditOutlined, SaveOutlined } from '@ant-design/icons';
 import CreateNotification from "./CreateNotification.tsx";
-import UserRolesPage from "./AssignRACI";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUserId } from '../Utils/moduleStorage';
 import { RollbackOutlined } from '@ant-design/icons';
@@ -19,13 +18,16 @@ import { ToastContainer } from "react-toastify";
 import { hasPermission } from "../Utils/auth.ts";
 import { formatPrerequisiteCodes, getPrerequisiteCodes, setActivityPrerequisites } from "../Utils/prerequisites";
 const Module = () => {
-    const { state } = useLocation();
+    const location = useLocation();
+    const state = (location.state as any) ?? null;
+    const editingState = state && typeof state === "object" && typeof state.id === "number" ? state : null;
+    const returnTo = state?.returnTo || (editingState?.moduleType === "MDTS" ? "/create/mdts-modules" : "/create/module-library");
+    const shouldAutoOpenMDTSCreate = !editingState && state?.launchMode === "MDTS_CREATE";
     const navigate = useNavigate();
     const existingAcronyms = useState(["FC", "BP", "AM", "IM"])[0];
-    const moduleName = state?.moduleName ?? "";
-    const mineType = state?.mineType ?? "";
-    const moduleCode = state?.moduleCode ?? null;
-    const [openModal, setOpenModal] = useState<boolean>(false);
+    const moduleName = editingState?.moduleName ?? "";
+    const mineType = editingState?.mineType ?? "";
+    const moduleCode = editingState?.moduleCode ?? editingState?.parentModuleCode ?? null;
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [selectedActivityRow, setSelectedActivityRow] = useState<any>(null);
     const [open, setOpen] = useState<boolean>(false);
@@ -43,7 +45,6 @@ const Module = () => {
     const [editingMineTypeId, setEditingMineTypeId] = useState<number | null>(null);
     const [moduleCodeName, setModuleCodeName] = useState<string>("");
     const [isModuleCodeManuallyEdited, setIsModuleCodeManuallyEdited] = useState<boolean>(false);
-    const [filteredModuleData, _setFilteredModuleData] = useState<any>(null);
     const [isFocused, setIsFocused] = useState(false);
     const [openCostCalcModal, setOpenCostCalcModal] = useState(false);
     const [openPostSaveModal, setOpenPostSaveModal] = useState(false);
@@ -58,11 +59,11 @@ const Module = () => {
         level: "",
         mineType: mineType,
         duration: '',
-        activities: regenerateCodes(parentModuleCode, state?.activities || []).map((activity: any) =>
+        activities: regenerateCodes(parentModuleCode, editingState?.activities || []).map((activity: any) =>
             setActivityPrerequisites(activity, activity, { manual: true })
         )
     });
-    let isEditing = !!state;
+    const isEditing = Boolean(editingState);
     const [moduleType, setModuleType] = useState("PERSONAL");
     const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
     const [discardEditByCreating, setDiscardEditByCreating] = useState(false);
@@ -93,6 +94,7 @@ const Module = () => {
     const [allModules, setAllModules] = useState<any>([]);
     const [importableModules, setImportableModules] = useState<any[]>([]);
     const [isMDTSCreation, setIsMDTSCreation] = useState(false);
+    const isMDTSContext = returnTo === "/create/mdts-modules" || isMDTSCreation || editingState?.moduleType === "MDTS";
     const [moduleCreationMode, setModuleCreationMode] = useState<"MANUAL" | "IMPORT">("MANUAL");
     const [importFromType, setImportFromType] = useState("");
     const [selectedImportModule, setSelectedImportModule] = useState(null);
@@ -107,26 +109,33 @@ const Module = () => {
     }, []);
 
     useEffect(() => {
-        if (state && state.activities) {
+        if (editingState && editingState.activities) {
             setModuleData({
-                id: state.id,
-                parentModuleCode: state.parentModuleCode,
-                moduleName: state.moduleName,
-                level: state.level,
-                mineType: state.mineType,
-                duration: state.duration,
-                activities: regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || []).map((activity: any) =>
+                id: editingState.id,
+                parentModuleCode: editingState.parentModuleCode,
+                moduleName: editingState.moduleName,
+                level: editingState.level,
+                mineType: editingState.mineType,
+                duration: editingState.duration,
+                activities: regenerateCodes(editingState.parentModuleCode || parentModuleCode, editingState.activities || []).map((activity: any) =>
                     setActivityPrerequisites(activity, activity, { manual: true })
                 )
             });
             setUndoStack([]);
             if (originalActivities.length === 0) {
-                setOriginalActivities(JSON.parse(JSON.stringify(regenerateCodes(state.parentModuleCode || parentModuleCode, state.activities || []))));
+                setOriginalActivities(JSON.parse(JSON.stringify(regenerateCodes(editingState.parentModuleCode || parentModuleCode, editingState.activities || []))));
             }
-        } else {
-            console.error("State or state.activities is not available.");
         }
-    }, [state]);
+    }, [editingState]);
+
+    useEffect(() => {
+        if (!shouldAutoOpenMDTSCreate) return;
+
+        setOpenPopup(true);
+        setIsMDTSCreation(true);
+        setModuleType("MDTS");
+        setModuleCreationMode("MANUAL");
+    }, [shouldAutoOpenMDTSCreate]);
 
     useEffect(() => {
         if (currentUser) {
@@ -263,7 +272,7 @@ const Module = () => {
 
                     if (updatedCount) {
                         notify.success("Module updated successfully!")
-                        navigate('/create/module-library');
+                        navigate(returnTo);
                     } else {
                         notify.error("Module update failed. No changes detected.");
                     }
@@ -279,7 +288,7 @@ const Module = () => {
                 return;
             }
 
-            navigate('/create/module-library');
+            navigate(returnTo);
         } catch (error) {
             notify.error("Failed to save/update module.");
         }
@@ -530,8 +539,8 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
     const handleCreateAnotherModule = () => {
         setOpenPostSaveModal(false);
-        setIsMDTSCreation(false);
-        setModuleType("PERSONAL");
+        setIsMDTSCreation(isMDTSContext);
+        setModuleType(isMDTSContext ? "MDTS" : "PERSONAL");
         setModuleNameError("");
         resetModuleForm();
         setOpenPopup(true);
@@ -539,7 +548,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
     const handleNavigateAfterSave = () => {
         setOpenPostSaveModal(false);
-        navigate('/create/module-library');
+        navigate(returnTo);
     };
 
     const generateShorthand = (input: string): string => {
@@ -726,7 +735,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setOpenCancelUpdateModulePopup(false);
 
         if (!discardEditByCreating) {
-            navigate('/create/module-library');
+            navigate(returnTo);
         }
         else {
             setModuleData({
@@ -737,7 +746,6 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                 duration: "",
                 activities: []
             })
-            isEditing = false;
             setTimeout(() => navigate(".", { replace: true }), 0);
         }
     }
@@ -750,7 +758,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             level: "",
             mineType: mineType,
             duration: '',
-            activities: regenerateCodes(parentModuleCode, state?.activities || []).map((activity: any) =>
+            activities: regenerateCodes(parentModuleCode, editingState?.activities || []).map((activity: any) =>
                 setActivityPrerequisites(activity, activity, { manual: true })
             )
         })
@@ -827,12 +835,6 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
     const showNotificationModal = () => setOpenNotificationModal(true);
     const showDocumentModal = () => setOpenDocumentModal(true);
-    const handleOpenCostCalcModal = () => setOpenCostCalcModal(true);
-
-    const showResponsibilityModal = () => {
-        setOpenResponsibilityModal(true);
-    };
-
     const handleCloseResponsibility = () => {
         setOpenResponsibilityModal(false);
         raciForm.resetFields();
@@ -1392,7 +1394,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                         </Col>
                                     )}
 
-                                    {hasPermission(currentUser?.role, "CREATE_NEW_Module") && !hasActiveModule && (
+                                    {hasPermission(currentUser?.role, "CREATE_NEW_Module") && !hasActiveModule && !isMDTSContext && (
                                         <>
                                             <Col>
                                                 <Tooltip title="Create New Module">
@@ -1570,6 +1572,10 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                     title={isMDTSCreation ? "Create New MDTS Module" : "Create New Module"}
                     open={openPopup}
                     onCancel={() => {
+                        if (shouldAutoOpenMDTSCreate && !hasActiveModule) {
+                            navigate(returnTo);
+                            return;
+                        }
                         setOpenPopup(false);
                         setIsMDTSCreation(false);
                         setModuleType("PERSONAL");
@@ -1610,28 +1616,30 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                 )} */}
 
                                 {/* Mine Type */}
-                                <Col span={24}>
-                                    <Row align="middle">
-                                        <Col span={8}><label>Module Creation Type</label></Col>
-                                        <Col span={16}>
-                                            <Radio.Group
-                                                value={moduleCreationMode}
-                                                onChange={(e) => {
-                                                    setModuleCreationMode(e.target.value);
-                                                    if (e.target.value !== "IMPORT") {
-                                                        setImportFromType("");
-                                                        setSelectedImportModule(null);
-                                                    }
-                                                }}
-                                            >
-                                                <Radio value="MANUAL">MANUALLY</Radio>
-                                                {hasPermission(currentUser?.role, "IMPORT_MODULE_FROM_OTHER_SOURCE") && (
-                                                    <Radio value="IMPORT">IMPORT</Radio>
-                                                )}
-                                            </Radio.Group>
-                                        </Col>
-                                    </Row>
-                                </Col>
+                                {!isMDTSCreation && (
+                                    <Col span={24}>
+                                        <Row align="middle">
+                                            <Col span={8}><label>Module Creation Type</label></Col>
+                                            <Col span={16}>
+                                                <Radio.Group
+                                                    value={moduleCreationMode}
+                                                    onChange={(e) => {
+                                                        setModuleCreationMode(e.target.value);
+                                                        if (e.target.value !== "IMPORT") {
+                                                            setImportFromType("");
+                                                            setSelectedImportModule(null);
+                                                        }
+                                                    }}
+                                                >
+                                                    <Radio value="MANUAL">MANUALLY</Radio>
+                                                    {hasPermission(currentUser?.role, "IMPORT_MODULE_FROM_OTHER_SOURCE") && (
+                                                        <Radio value="IMPORT">IMPORT</Radio>
+                                                    )}
+                                                </Radio.Group>
+                                            </Col>
+                                        </Row>
+                                    </Col>
+                                )}
 
                                 <Col span={24}>
                                     <Row align="middle">
@@ -2057,7 +2065,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                     onOk={handleCreateAnotherModule}
                     onCancel={handleNavigateAfterSave}
                     okText="Create Another"
-                    cancelText="Go to Module Library"
+                    cancelText={isMDTSContext ? "Go to MDTS Modules" : "Go to Module Library"}
                     className="modal-container"
                     maskClosable={false}
                     keyboard={false}
@@ -2065,7 +2073,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                 >
                     <div style={{ padding: "0px 10px" }}>
                         <p>
-                            Module created successfully. Do you want to create another module or go to the module library?
+                            Module created successfully. Do you want to create another module or go back to the list?
                         </p>
                     </div>
                 </Modal>
