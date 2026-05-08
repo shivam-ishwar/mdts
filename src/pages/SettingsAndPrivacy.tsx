@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
-import { Card, Row, Col, Switch, Button, Tag, Divider } from "antd";
-import { BellOutlined, LockOutlined, SafetyOutlined, UserOutlined } from "@ant-design/icons";
+import { Card, Row, Col, Switch, Button, Tag, Divider, Select, Input } from "antd";
+import { BellOutlined, LockOutlined, SafetyOutlined, UserOutlined, BankOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import { db } from "../Utils/dataStorege";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { userStore } from "../Utils/UserStore";
 import { notify } from "../Utils/ToastNotify";
+import {
+    COMPANY_TYPE_OPTIONS,
+    INDUSTRY_TYPE_OPTIONS,
+    OTHER_VALUE,
+    parseStoredCompanyType,
+    parseStoredIndustryType,
+} from "../constants/companyAndIndustryOptions";
 import "../styles/settings-privacy.css";
+
+const { Option } = Select;
 
 type SettingsPrivacy = {
     emailAlerts: boolean;
@@ -33,6 +42,12 @@ const SettingsAndPrivacy = () => {
         projectCount: 0,
         projectsWithTimeline: 0,
         totalTimelineVersions: 0,
+    });
+    const [orgTypes, setOrgTypes] = useState({
+        companyType: "",
+        companyTypeOther: "",
+        industryType: "",
+        industryTypeOther: "",
     });
 
     useEffect(() => {
@@ -74,6 +89,28 @@ const SettingsAndPrivacy = () => {
                 if (!active) return;
 
                 setUserInfo(resolvedUser);
+
+                const company =
+                    resolvedUser?.orgId != null && String(resolvedUser.orgId).length > 0
+                        ? await db.getCompanyByGuiId(String(resolvedUser.orgId))
+                        : null;
+                const ctParsed = parseStoredCompanyType(
+                    company?.companyType ?? resolvedUser?.companyType,
+                    company?.companyTypeOther ?? resolvedUser?.companyTypeOther
+                );
+                const itParsed = parseStoredIndustryType(
+                    company?.industryType ?? resolvedUser?.industryType,
+                    company?.industryTypeOther ?? resolvedUser?.industryTypeOther
+                );
+                if (!active) return;
+
+                setOrgTypes({
+                    companyType: ctParsed.companyType,
+                    companyTypeOther: ctParsed.companyTypeOther,
+                    industryType: itParsed.industryType,
+                    industryTypeOther: itParsed.industryTypeOther,
+                });
+
                 setSettings({
                     emailAlerts: saved?.emailAlerts ?? defaultSettings.emailAlerts,
                     activityReminders: saved?.activityReminders ?? defaultSettings.activityReminders,
@@ -107,6 +144,19 @@ const SettingsAndPrivacy = () => {
             return;
         }
 
+        const isOrgAdmin = String(userInfo?.role || "").toLowerCase() === "admin";
+
+        if (isOrgAdmin) {
+            if (orgTypes.companyType === OTHER_VALUE && !String(orgTypes.companyTypeOther || "").trim()) {
+                notify.error('Please specify the company type when "Other" is selected.');
+                return;
+            }
+            if (orgTypes.industryType === OTHER_VALUE && !String(orgTypes.industryTypeOther || "").trim()) {
+                notify.error('Please specify the industry type when "Other" is selected.');
+                return;
+            }
+        }
+
         setSaving(true);
         try {
             const allUsers = await db.getUsers();
@@ -115,17 +165,51 @@ const SettingsAndPrivacy = () => {
                     String(u?.email || "").trim().toLowerCase() === String(userInfo?.email || "").trim().toLowerCase()
             );
 
+            const companyTypeOtherStored =
+                orgTypes.companyType === OTHER_VALUE ? String(orgTypes.companyTypeOther || "").trim() : "";
+            const industryTypeOtherStored =
+                orgTypes.industryType === OTHER_VALUE ? String(orgTypes.industryTypeOther || "").trim() : "";
+
             if (target?.id != null) {
                 await db.updateUsers(target.id, {
                     ...target,
                     settingsPrivacy: settings,
+                    ...(isOrgAdmin
+                        ? {
+                              companyType: orgTypes.companyType,
+                              companyTypeOther: companyTypeOtherStored,
+                              industryType: orgTypes.industryType,
+                              industryTypeOther: industryTypeOtherStored,
+                          }
+                        : {}),
                 });
+            }
+
+            if (isOrgAdmin && userInfo?.orgId) {
+                const existingCompany = await db.getCompanyByGuiId(String(userInfo.orgId));
+                if (existingCompany?.id != null) {
+                    await db.updateCompany(existingCompany.id, {
+                        ...existingCompany,
+                        companyType: orgTypes.companyType,
+                        companyTypeOther: companyTypeOtherStored,
+                        industryType: orgTypes.industryType,
+                        industryTypeOther: industryTypeOtherStored,
+                    });
+                }
             }
 
             const currentLocalUser = getCurrentUser() || {};
             const updatedLocalUser = {
                 ...currentLocalUser,
                 settingsPrivacy: settings,
+                ...(isOrgAdmin
+                    ? {
+                          companyType: orgTypes.companyType,
+                          companyTypeOther: companyTypeOtherStored,
+                          industryType: orgTypes.industryType,
+                          industryTypeOther: industryTypeOtherStored,
+                      }
+                    : {}),
             };
 
             localStorage.setItem("user", JSON.stringify(updatedLocalUser));
@@ -190,6 +274,88 @@ const SettingsAndPrivacy = () => {
                             </div>
                             <Switch checked={settings.showContactInOrg} onChange={(v) => updateSetting("showContactInOrg", v)} />
                         </div>
+                    </Card>
+
+                    <Card className="sp-card" title={<span><BankOutlined /> Organization</span>}>
+                        <div className="sp-org-fields">
+                            <div className="sp-org-field">
+                                <label className="sp-org-label">Company type</label>
+                                <Select
+                                    className="sp-org-select"
+                                    placeholder="Select company type"
+                                    value={orgTypes.companyType || undefined}
+                                    onChange={(v) =>
+                                        setOrgTypes((prev) => ({
+                                            ...prev,
+                                            companyType: v,
+                                            companyTypeOther: v === OTHER_VALUE ? prev.companyTypeOther : "",
+                                        }))
+                                    }
+                                    showSearch
+                                    optionFilterProp="children"
+                                    disabled={String(userInfo?.role || "").toLowerCase() !== "admin"}
+                                >
+                                    {COMPANY_TYPE_OPTIONS.map((opt) => (
+                                        <Option key={opt} value={opt}>
+                                            {opt}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </div>
+                            {orgTypes.companyType === OTHER_VALUE && (
+                                <div className="sp-org-field">
+                                    <label className="sp-org-label">Specify company type</label>
+                                    <Input
+                                        value={orgTypes.companyTypeOther}
+                                        onChange={(e) =>
+                                            setOrgTypes((prev) => ({ ...prev, companyTypeOther: e.target.value }))
+                                        }
+                                        placeholder="Describe company type"
+                                        disabled={String(userInfo?.role || "").toLowerCase() !== "admin"}
+                                    />
+                                </div>
+                            )}
+                            <div className="sp-org-field">
+                                <label className="sp-org-label">Industry type</label>
+                                <Select
+                                    className="sp-org-select"
+                                    placeholder="Select industry type"
+                                    value={orgTypes.industryType || undefined}
+                                    onChange={(v) =>
+                                        setOrgTypes((prev) => ({
+                                            ...prev,
+                                            industryType: v,
+                                            industryTypeOther: v === OTHER_VALUE ? prev.industryTypeOther : "",
+                                        }))
+                                    }
+                                    showSearch
+                                    optionFilterProp="children"
+                                    disabled={String(userInfo?.role || "").toLowerCase() !== "admin"}
+                                >
+                                    {INDUSTRY_TYPE_OPTIONS.map((opt) => (
+                                        <Option key={opt} value={opt}>
+                                            {opt}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </div>
+                            {orgTypes.industryType === OTHER_VALUE && (
+                                <div className="sp-org-field">
+                                    <label className="sp-org-label">Specify industry</label>
+                                    <Input
+                                        value={orgTypes.industryTypeOther}
+                                        onChange={(e) =>
+                                            setOrgTypes((prev) => ({ ...prev, industryTypeOther: e.target.value }))
+                                        }
+                                        placeholder="Describe industry type"
+                                        disabled={String(userInfo?.role || "").toLowerCase() !== "admin"}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                        {String(userInfo?.role || "").toLowerCase() !== "admin" && (
+                            <p className="sp-org-hint">Only organization admins can edit company and industry type.</p>
+                        )}
                     </Card>
                 </Col>
 

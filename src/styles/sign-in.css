@@ -31,7 +31,7 @@
 }
 
 .signup-container .signup-adjust {
-  height: calc(100vh - 30px);
+  height: calc(100vh - 100px);
 }
 
 .signup-container .signup-left {
@@ -42,6 +42,8 @@
   justify-content: space-between;
   box-shadow: var(--shadow-md);
   border: 1px solid rgba(0, 0, 0, .06);
+  border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
 }
 
 .signup-container .vector-image {
@@ -106,15 +108,17 @@
   background: var(--bg-surface);
   padding: 2rem;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .signup-container .form-card {
   width: 100%;
-  max-width: 600px;
+  max-width: 640px;
 }
 
 .signup-container .form-card h2 {
@@ -122,6 +126,24 @@
   font-weight: 800;
   color: var(--text-primary);
   margin: 0 0 14px 0;
+}
+
+.signup-container .form-body .ant-form-item {
+  margin-bottom: 14px !important;
+}
+
+.signup-container .form-body .ant-form-item-with-help {
+  margin-bottom: 18px !important;
+}
+
+.signup-container .form-body .ant-form-item-label > label {
+  margin-bottom: 6px;
+}
+
+.signup-container .form-body .ant-form-item-explain-error {
+  margin-top: 4px;
+  line-height: 1.35;
+  font-size: 12px;
 }
 
 .signup-container form input[type="email"],
@@ -274,6 +296,23 @@
   box-shadow: none;
 }
 
+.signup-container .forgot-password-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -4px 0 14px;
+}
+
+.signup-container .forgot-password-row a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-size: .9rem;
+  font-weight: 700;
+}
+
+.signup-container .forgot-password-row a:hover {
+  text-decoration: underline;
+}
+
 .signup-container .signin-link {
   font-size: .9rem;
   text-align: center;
@@ -294,26 +333,51 @@
 
 .signup-container .form-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
-  margin-top: 20px;
+  margin-top: 8px;
   padding-top: 10px;
 }
 
 .signup-container .form-actions .ant-btn:last-child {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .signup-container .form-actions .ant-btn {
-  min-width: 100px;
+  width: 100%;
+  height: var(--auth-control-height);
   font-size: 14px;
-  padding: 6px 16px;
+  font-weight: 700;
+  padding: 0 16px;
   border-radius: var(--radius-md);
   margin-bottom: 4px;
 }
 
+.signup-container .form-actions .ant-btn-primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--text-inverse);
+  box-shadow: 0 10px 26px rgba(31, 122, 99, .22);
+}
+
+.signup-container .form-actions .ant-btn-primary:hover,
+.signup-container .form-actions .ant-btn-primary:focus {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--text-inverse);
+}
+
+.signup-container .form-actions .ant-btn-primary:active {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
 .signup-container .form-section {
-  padding-bottom: 8px;
+  padding-bottom: 0;
+}
+
+.signup-container .form-body {
+  margin-bottom: 10px;
 }
 
 .signup-container .step-header {
@@ -365,6 +429,18 @@
   .signup-container .signin-adjust,
   .signup-container .signup-adjust {
     height: auto;
+  }
+}
+
+@media (max-width:768px) {
+  .signup-container .signup-right,
+  .signup-container .signup-left {
+    padding: 1.25rem;
+  }
+
+  .signup-container .social-buttons {
+    flex-direction: column;
+    gap: .75rem;
   }
 }
 .password-field {

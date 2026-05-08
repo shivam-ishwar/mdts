@@ -7,6 +7,11 @@ import ImageContainer from "../Components/ImageContainer";
 import { db } from "../Utils/dataStorege.ts";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
+import {
+  COMPANY_TYPE_OPTIONS,
+  INDUSTRY_TYPE_OPTIONS,
+  OTHER_VALUE,
+} from "../constants/companyAndIndustryOptions";
 interface EmployeeData {
   name: string;
   company: string;
@@ -35,7 +40,9 @@ export const EmployeeRegistration = () => {
     company: null as string | null,
     designation: null as string | null,
     companyType: null as string | null,
+    companyTypeOther: null as string | null,
     industryType: null as string | null,
+    industryTypeOther: null as string | null,
     mobile: null as string | null,
     email: null as string | null,
     whatsapp: null as string | null,
@@ -62,6 +69,22 @@ export const EmployeeRegistration = () => {
 
   const handleSelectChange = (value: any, name: any) => {
     setFormData((prev: any) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCompanyTypeChange = (value: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      companyType: value,
+      companyTypeOther: value === OTHER_VALUE ? prev.companyTypeOther ?? "" : "",
+    }));
+  };
+
+  const handleIndustryTypeChange = (value: string) => {
+    setFormData((prev: any) => ({
+      ...prev,
+      industryType: value,
+      industryTypeOther: value === OTHER_VALUE ? prev.industryTypeOther ?? "" : "",
+    }));
   };
 
   const handleInputChange = (e: any) => {
@@ -106,18 +129,42 @@ export const EmployeeRegistration = () => {
                       rules={[{ required: true, message: "Please select company type" }]}
                     >
                       <Select
-                        value={formData.companyType}
-                        onChange={(value) => handleSelectChange(value, "companyType")}
+                        value={formData.companyType || undefined}
+                        onChange={(value) => handleCompanyTypeChange(value)}
                         placeholder="Select Company Type"
                         style={{ width: "100%" }}
+                        showSearch
+                        optionFilterProp="children"
                       >
-                        <Option value="Mining">Mining</Option>
-                        <Option value="Construction">Construction</Option>
-                        <Option value="Equipment Supplier">Equipment Supplier</Option>
+                        {COMPANY_TYPE_OPTIONS.map((opt) => (
+                          <Option key={opt} value={opt}>
+                            {opt}
+                          </Option>
+                        ))}
                       </Select>
                     </Form.Item>
                   </Col>
                 </Row>
+
+                {formData.companyType === OTHER_VALUE && (
+                  <Row gutter={[16, 16]} className="form-row">
+                    <Col span={12} />
+                    <Col span={12}>
+                      <Form.Item
+                        label="Specify company type"
+                        colon={false}
+                        rules={[{ required: true, message: "Please describe the company type" }]}
+                      >
+                        <Input
+                          name="companyTypeOther"
+                          value={formData.companyTypeOther ?? ""}
+                          onChange={handleInputChange}
+                          placeholder="Enter company type"
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                )}
 
                 <Row gutter={[16, 16]} className="form-row">
                   <Col span={12}>
@@ -127,14 +174,18 @@ export const EmployeeRegistration = () => {
                       rules={[{ required: true, message: "Please select industry type" }]}
                     >
                       <Select
-                        value={formData.industryType}
-                        onChange={(value) => handleSelectChange(value, "industryType")}
+                        value={formData.industryType || undefined}
+                        onChange={(value) => handleIndustryTypeChange(value)}
                         placeholder="Select Industry Type"
                         style={{ width: "100%" }}
+                        showSearch
+                        optionFilterProp="children"
                       >
-                        <Option value="Coal">Coal</Option>
-                        <Option value="Iron">Iron</Option>
-                        <Option value="Gold">Gold</Option>
+                        {INDUSTRY_TYPE_OPTIONS.map((opt) => (
+                          <Option key={opt} value={opt}>
+                            {opt}
+                          </Option>
+                        ))}
                       </Select>
                     </Form.Item>
                   </Col>
@@ -157,6 +208,26 @@ export const EmployeeRegistration = () => {
                     </Form.Item>
                   </Col>
                 </Row>
+
+                {formData.industryType === OTHER_VALUE && (
+                  <Row gutter={[16, 16]} className="form-row">
+                    <Col span={12}>
+                      <Form.Item
+                        label="Specify industry"
+                        colon={false}
+                        rules={[{ required: true, message: "Please describe the industry type" }]}
+                      >
+                        <Input
+                          name="industryTypeOther"
+                          value={formData.industryTypeOther ?? ""}
+                          onChange={handleInputChange}
+                          placeholder="Enter industry type"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={12} />
+                  </Row>
+                )}
 
                 <Row gutter={[16, 16]} className="form-row">
                   <Col span={12}>

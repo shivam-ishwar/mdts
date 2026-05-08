@@ -131,6 +131,11 @@ const asNum = (v: any) => {
     return Number.isFinite(n) ? n : 0;
 };
 
+const formatCompactNumber = (value: number) =>
+    Number(value || 0).toLocaleString(undefined, {
+        maximumFractionDigits: Math.abs(value) >= 100 ? 0 : 1,
+    });
+
 const addDays = (d: Date, days: number) => new Date(d.getTime() + days * dayMs);
 
 const toInputDate = (d: Date) => {
@@ -1243,6 +1248,8 @@ const Charts = (props: any) => {
                 value: `${topStats.completionPct}%`,
                 hint: `${topStats.completedCount} of ${topStats.totalActivities} activities closed`,
                 meta: `${topStats.totalActivities - topStats.completedCount} activities open`,
+                badge: "CP",
+                tone: topStats.completionPct >= 70 ? "Strong" : topStats.completionPct >= 40 ? "Moderate" : "Needs push",
             },
             {
                 key: "onTime",
@@ -1250,6 +1257,8 @@ const Charts = (props: any) => {
                 value: `${topStats.onTimeCompletionPct}%`,
                 hint: `${topStats.lateCompletedCount} completed late`,
                 meta: `${topStats.completedCount} activities completed`,
+                badge: "OT",
+                tone: topStats.onTimeCompletionPct >= 75 ? "Steady" : topStats.onTimeCompletionPct >= 50 ? "Watching" : "Recovery",
             },
             {
                 key: "risk",
@@ -1257,6 +1266,8 @@ const Charts = (props: any) => {
                 value: `${topStats.riskLoad}`,
                 hint: `${topStats.riskLoadPct}% of portfolio at risk`,
                 meta: "Delayed + At Risk + Blocked",
+                badge: "RL",
+                tone: topStats.riskLoad === 0 ? "Clear" : topStats.riskLoadPct < 25 ? "Contained" : "Hotspot",
             },
             {
                 key: "delay",
@@ -1264,6 +1275,8 @@ const Charts = (props: any) => {
                 value: `${topStats.totalDelayDays}D`,
                 hint: `${topStats.totalDelayedActivities} delayed activities`,
                 meta: `Avg ${topStats.avgDelayPerDelayedActivity}d per delayed activity`,
+                badge: "DE",
+                tone: topStats.totalDelayDays <= 0 ? "Clean" : topStats.totalDelayDays < 20 ? "Manageable" : "Escalated",
             },
             {
                 key: "cost",
@@ -1271,9 +1284,60 @@ const Charts = (props: any) => {
                 value: `${Number(topStats.cost.variancePct).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`,
                 hint: costStatus,
                 meta: `Forecast ${Number(topStats.cost.forecast).toLocaleString(undefined, { maximumFractionDigits: 0 })} • Budget ${Number(topStats.cost.budgeted).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                badge: "CV",
+                tone: !topStats.cost.hasAny ? "Pending" : topStats.cost.variancePct <= 0 ? "Controlled" : "Alert",
             },
         ];
     }, [topStats]);
+
+    const projectEnd = useMemo(() => addDays(projectStart, Math.max(totalDays - 1, 0)), [projectStart, totalDays]);
+
+    const heroHighlights = useMemo(
+        () => [
+            {
+                label: "Tracked modules",
+                value: `${modules.length}`,
+                note: "with timeline activity",
+            },
+            {
+                label: "Schedule window",
+                value: `${fmt(projectStart)} - ${fmt(projectEnd)}`,
+                note: `${totalDays} monitored day(s)`,
+            },
+            {
+                label: "Top risk pocket",
+                value: topStats.topDelayBucket,
+                note: `${topStats.totalDelayedActivities} delayed activity(s)`,
+            },
+            {
+                label: "Cost posture",
+                value: !topStats.cost.hasAny ? "Awaiting cost feed" : topStats.cost.variancePct > 0 ? "Over budget trend" : "Within plan",
+                note: !topStats.cost.hasAny ? "Forecast unavailable" : `${formatCompactNumber(topStats.cost.forecast)} forecast vs ${formatCompactNumber(topStats.cost.budgeted)} budget`,
+            },
+        ],
+        [modules.length, projectStart, projectEnd, totalDays, topStats]
+    );
+
+    const commandDeck = useMemo(
+        () => [
+            {
+                label: "Active workstreams",
+                value: `${health.totals.totalActive}`,
+                note: `${health.totals.pctOnTrack}% on track right now`,
+            },
+            {
+                label: "Critical attention",
+                value: `${health.totals.delayedBeyondSlack}`,
+                note: "activities beyond available slack",
+            },
+            {
+                label: "Cost watchpoint",
+                value: costView.totals.firstOverrunDate || "No overrun",
+                note: costView.totals.firstOverrunDate ? "first date actual + delay crossed budget" : "budget line still holding",
+            },
+        ],
+        [health.totals, costView.totals.firstOverrunDate]
+    );
 
     const updateMetricsScrollState = useCallback(() => {
         const el = metricsRailRef.current;
@@ -1347,6 +1411,46 @@ const Charts = (props: any) => {
 
     return (
         <div className="chartsPage">
+            <section className="dashboardHero">
+                <div className="heroBackdrop heroBackdropOne" />
+                <div className="heroBackdrop heroBackdropTwo" />
+                <div className="dashboardHeroMain">
+                    <div className="heroCopy">
+                        <div className="heroEyebrow">AML Monitoring Dashboard</div>
+                        <h1 className="heroTitle">Sharper execution visibility across schedule, risk, and cost.</h1>
+                        <p className="heroDescription">
+                            Monitor timeline performance, spot root-cause pressure early, and keep cost drift visible from one decision-ready command center.
+                        </p>
+
+                        <div className="heroHighlightsGrid">
+                            {heroHighlights.map((item) => (
+                                <div className="heroHighlightCard" key={item.label}>
+                                    <div className="heroHighlightLabel">{item.label}</div>
+                                    <div className="heroHighlightValue">{item.value}</div>
+                                    <div className="heroHighlightNote">{item.note}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="heroCommandDeck">
+                        <div className="heroCommandTitle">Operations pulse</div>
+                        <div className="heroCommandSub">A fast view of the portfolio areas demanding attention now.</div>
+                        <div className="heroCommandList">
+                            {commandDeck.map((item) => (
+                                <div className="heroCommandItem" key={item.label}>
+                                    <div className="heroCommandValue">{item.value}</div>
+                                    <div className="heroCommandContent">
+                                        <div className="heroCommandLabel">{item.label}</div>
+                                        <div className="heroCommandNote">{item.note}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <div className="topStatsWrap">
                 {canScrollMetricsLeft ? (
                     <button className="metricsArrow metricsArrowLeft" onClick={() => scrollMetrics("left")} aria-label="Scroll metrics left">
@@ -1357,6 +1461,8 @@ const Charts = (props: any) => {
                 <div className="topStatsRail" ref={metricsRailRef} onScroll={updateMetricsScrollState}>
                     {topMetrics.map((metric) => (
                         <div className={`statCard statCard--${metric.key}`} key={metric.key}>
+                            <div className="statBadge">{metric.badge}</div>
+                            <div className="statTone">{metric.tone}</div>
                             <div className="statLabel">{metric.label}</div>
                             <div className="statValue">{metric.value}</div>
                             <div className="statHint">{metric.hint}</div>
@@ -1658,18 +1764,42 @@ const Charts = (props: any) => {
                             {!healthRows.length ? (
                                 <div className="emptyState">No Content</div>
                             ) : (
-                                <div className="chartWrap" style={{ height: 260, marginTop: 10 }}>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie data={sectionHealth.donut} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="90%" paddingAngle={2}>
-                                                {sectionHealth.donut.map((entry) => (
-                                                    <Cell key={entry.name} fill={healthColors[entry.name] || "#94a3b8"} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip />
-                                            <Legend />
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                <div className="healthSectionLayout">
+                                    <div className="chartWrap healthChartWrap">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie data={sectionHealth.donut} dataKey="value" nameKey="name" innerRadius="62%" outerRadius="90%" paddingAngle={2}>
+                                                    {sectionHealth.donut.map((entry) => (
+                                                        <Cell key={entry.name} fill={healthColors[entry.name] || "#94a3b8"} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip />
+                                                <Legend />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="sectionKpiGrid">
+                                        <div className="sectionKpiCard">
+                                            <div className="sectionKpiLabel">Active work</div>
+                                            <div className="sectionKpiValue">{sectionHealth.totals.totalActive}</div>
+                                            <div className="sectionKpiMeta">currently in progress or yet to start</div>
+                                        </div>
+                                        <div className="sectionKpiCard">
+                                            <div className="sectionKpiLabel">On-track rate</div>
+                                            <div className="sectionKpiValue">{sectionHealth.totals.pctOnTrack}%</div>
+                                            <div className="sectionKpiMeta">of open activities staying within plan</div>
+                                        </div>
+                                        <div className="sectionKpiCard">
+                                            <div className="sectionKpiLabel">Beyond slack</div>
+                                            <div className="sectionKpiValue">{sectionHealth.totals.delayedBeyondSlack}</div>
+                                            <div className="sectionKpiMeta">activities needing immediate recovery action</div>
+                                        </div>
+                                        <div className="sectionKpiCard">
+                                            <div className="sectionKpiLabel">Avg completion delay</div>
+                                            <div className="sectionKpiValue">{sectionHealth.totals.avgDelayDays}d</div>
+                                            <div className="sectionKpiMeta">across completed activities in this filter</div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>

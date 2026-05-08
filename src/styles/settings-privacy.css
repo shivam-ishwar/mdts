@@ -126,6 +126,40 @@
     padding-bottom: 8px;
 }
 
+.sp-org-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.sp-org-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sp-org-label {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.sp-org-select {
+    width: 100%;
+}
+
+.sp-page .sp-org-field .ant-input,
+.sp-page .sp-org-select .ant-select-selector {
+    border-radius: var(--radius-md) !important;
+}
+
+.sp-org-hint {
+    margin: 12px 0 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
 @media (max-width: 768px) {
     .sp-page {
         padding: 12px;

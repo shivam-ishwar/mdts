@@ -29,7 +29,10 @@ type AppNotification = {
     isRead?: boolean;
 };
 
+const workspaceHomeNavItem = { label: "Home", action: "/workspace-home", requiredPermission: "VIEW_NAVBAR_MENUS" };
+
 const initialNavLinks: any[] = [
+    workspaceHomeNavItem,
     // { label: "Dashboard", action: "/dashboard", requiredPermission: "VIEW_NAVBAR_MENUS" },
     { label: "Dashboard", action: "/project", requiredPermission: "VIEW_NAVBAR_MENUS" },
     { label: "Knowledge Center", action: "/knowledge-center", requiredPermission: "VIEW_NAVBAR_MENUS" },
@@ -49,6 +52,7 @@ const initialNavLinks: any[] = [
             { label: "Register New Project", action: "/create/register-new-project", requiredPermission: "CREATE_PROJECT" },
             { label: "Modules", action: "/modules", requiredPermission: "CREATE_MODULE" },
             { label: "MDTS Modules", action: "/create/mdts-modules", requiredPermission: "CREATE_MODULE" },
+            { label: "Notepad", action: "/create/notepad", requiredPermission: "VIEW_NAVBAR_MENUS" },
             { label: "Timeline Builder", action: "/create/timeline-builder", requiredPermission: "BUILD_TIMEBUILDER" },
             { label: "Status Update", action: "/create/status-update", requiredPermission: "UPDATE_STATUS" },
             { label: "Standardization Links", action: "/create/standardization-links", requiredPermission: "UPDATE_STATUS" },
@@ -98,9 +102,15 @@ const Navbar: React.FC = () => {
     const daysDiff = (a: Date, b: Date) => Math.floor((a.getTime() - b.getTime()) / (24 * 60 * 60 * 1000));
 
     useEffect(() => {
-        const storedNavLinks = localStorage.getItem('navLinks');
+        const storedNavLinks = localStorage.getItem("navLinks");
         if (storedNavLinks) {
-            setNavLinks(JSON.parse(storedNavLinks));
+            try {
+                const parsed = JSON.parse(storedNavLinks) as NavItem[];
+                const hasWorkspaceHome = parsed.some((x: any) => x?.action === "/workspace-home");
+                setNavLinks(hasWorkspaceHome ? parsed : [workspaceHomeNavItem, ...parsed]);
+            } catch {
+                setNavLinks(initialNavLinks);
+            }
         }
         const storedUser = localStorage.getItem("user");
         if (storedUser) {

@@ -300,29 +300,90 @@ const Module = () => {
     const isModuleRow = (row: any) =>
         !!row?.parentModuleCode && !row?.code;
 
-const applyPrerequisites = (activities: any[]) =>
-    activities.map((activity: any, index: number) => {
-        if (activity?.prerequisiteTouched) {
-            return setActivityPrerequisites(activity, activity);
-        }
+    const getActivityLockInfo = (activities: any[] = []) => {
+        const childrenByParent = new Map<string, any[]>();
+        const byId = new Map<string, any>();
 
-        const previousSibling = [...activities]
-            .slice(0, index)
-            .reverse()
-            .find((candidate: any) => (candidate?.parentId ?? null) === (activity?.parentId ?? null));
+        activities.forEach((activity: any) => {
+            const id = String(getActivityId(activity) ?? "");
+            if (id) byId.set(id, activity);
+            const parentId = activity?.parentId != null ? String(activity.parentId) : null;
+            if (!parentId) return;
+            const bucket = childrenByParent.get(parentId) || [];
+            bucket.push(activity);
+            childrenByParent.set(parentId, bucket);
+        });
 
-        const parentActivity = activity?.parentId
-            ? activities.find((candidate: any) => getActivityId(candidate) === activity.parentId)
-            : null;
+        const hasChildren = (activity: any) => {
+            const id = String(getActivityId(activity) ?? "");
+            return id ? (childrenByParent.get(id)?.length || 0) > 0 : false;
+        };
 
-        const defaultPrerequisites = previousSibling?.code
-            ? [previousSibling.code]
-            : parentActivity?.code
-                ? [parentActivity.code]
-                : [];
+        const hasAncestorWithChildren = (activity: any) => {
+            const selfId = String(getActivityId(activity) ?? "");
+            if (!selfId) return false;
 
-        return setActivityPrerequisites(activity, defaultPrerequisites);
-    });
+            let parentId = activity?.parentId != null ? String(activity.parentId) : null;
+            while (parentId) {
+                const parent = byId.get(parentId);
+                if (!parent) break;
+                if (hasChildren(parent)) return true;
+                parentId = parent?.parentId != null ? String(parent.parentId) : null;
+            }
+            return false;
+        };
+
+        const isLockedForManualPrereq = (activity: any) =>
+            hasChildren(activity) || hasAncestorWithChildren(activity);
+
+        return { byId, hasChildren, hasAncestorWithChildren, isLockedForManualPrereq };
+    };
+
+    const applyPrerequisites = (activities: any[]) => {
+        const { byId, hasChildren, hasAncestorWithChildren } = getActivityLockInfo(activities);
+
+        return activities.map((activity: any, index: number) => {
+            const parentActivity = activity?.parentId
+                ? byId.get(String(activity.parentId))
+                : null;
+
+            const isParentNode = hasChildren(activity);
+            const isDescendantOfParentNode = hasAncestorWithChildren(activity);
+            const inheritedFromParent = parentActivity ? getPrerequisiteCodes(parentActivity) : [];
+
+            if (isParentNode) {
+                // Parent rows keep their current prerequisite value, but manual edits are locked in UI.
+                return setActivityPrerequisites(activity, activity, { manual: !!activity?.prerequisiteTouched });
+            }
+
+            if (isDescendantOfParentNode) {
+                // Descendants default to parent's prerequisites, but can be edited when context exists.
+                if (activity?.prerequisiteTouched) {
+                    return setActivityPrerequisites(activity, activity, { manual: true });
+                }
+                return setActivityPrerequisites(activity, inheritedFromParent, { manual: false });
+            }
+
+            if (activity?.prerequisiteTouched) {
+                return setActivityPrerequisites(activity, activity, { manual: true });
+            }
+
+            const previousSibling = [...activities]
+                .slice(0, index)
+                .reverse()
+                .find((candidate: any) => (candidate?.parentId ?? null) === (activity?.parentId ?? null));
+
+            const defaultPrerequisites = inheritedFromParent.length > 0
+                ? inheritedFromParent
+                : previousSibling?.code
+                    ? [previousSibling.code]
+                    : parentActivity?.code
+                        ? [parentActivity.code]
+                        : [];
+
+            return setActivityPrerequisites(activity, defaultPrerequisites, { manual: false });
+        });
+    };
 
 const setActivitiesWithRecalc = (activities: any[]) => {
     const nextActivities = regenerateCodes(moduleData.parentModuleCode, activities || []);
@@ -715,12 +776,75 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setModuleCodeName(trimmedName ? getGeneratedModuleCode(trimmedName) : "");
     }, [newModelName, isModuleCodeManuallyEdited]);
 
-    const getAllPrerequisites = () => {
-        return moduleData.activities
-            .map((activity: any) => activity.code);
+    const isPrerequisiteLocked = (activity: any) => {
+        const allActivities = moduleData?.activities || [];
+        const byId = new Map<string, any>();
+        const childCount = new Map<string, number>();
+
+        allActivities.forEach((row: any) => {
+            const id = String(getActivityId(row) ?? "");
+            if (id) byId.set(id, row);
+            if (row?.parentId != null) {
+                const parentId = String(row.parentId);
+                childCount.set(parentId, (childCount.get(parentId) || 0) + 1);
+            }
+        });
+
+        const hasChildren = (row: any) => {
+            const id = String(getActivityId(row) ?? "");
+            return !!id && (childCount.get(id) || 0) > 0;
+        };
+
+        const getPreviousSibling = (row: any) => {
+            const rowId = String(getActivityId(row) ?? "");
+            const rowIndex = allActivities.findIndex((item: any) => String(getActivityId(item) ?? "") === rowId);
+            if (rowIndex <= 0) return null;
+            return [...allActivities]
+                .slice(0, rowIndex)
+                .reverse()
+                .find((candidate: any) => (candidate?.parentId ?? null) === (row?.parentId ?? null)) || null;
+        };
+
+        const previousSibling = getPreviousSibling(activity);
+        const hasPreviousSibling = !!previousSibling?.code;
+
+        const parent =
+            activity?.parentId != null
+                ? byId.get(String(activity.parentId))
+                : null;
+        const parentPrereq = parent ? getPrerequisiteCodes(parent) : [];
+        const hasParentPrereq = parentPrereq.length > 0;
+
+        // First top-level activity has no prior candidate to depend on.
+        if (activity?.parentId == null && !hasPreviousSibling) return true;
+
+        let parentId = activity?.parentId != null ? String(activity.parentId) : null;
+        while (parentId) {
+            const parent = byId.get(parentId);
+            if (!parent) break;
+            if (hasChildren(parent)) {
+                // Only lock inherited descendants when parent provides no prerequisite context.
+                return !hasParentPrereq && !hasPreviousSibling;
+            }
+            parentId = parent?.parentId != null ? String(parent.parentId) : null;
+        }
+
+        return false;
+    };
+
+    const getAllPrerequisites = (activity: any) => {
+        const activities = moduleData?.activities || [];
+        const locked = isPrerequisiteLocked(activity);
+        if (locked) return [];
+        return activities
+            .map((row: any) => row.code)
+            .filter((code: any) => code !== activity?.code);
     };
 
     const handlePrerequisiteChange = (activityCode: any, value: any) => {
+        const target = (moduleData?.activities || []).find((activity: any) => activity.code === activityCode);
+        if (!target || isPrerequisiteLocked(target)) return;
+
         const updatedActivities = moduleData.activities.map((activity: any) =>
             activity.code === activityCode ? setActivityPrerequisites(activity, value, { manual: true }) : activity
         );
@@ -752,16 +876,16 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
     const handleCancelModuleCreation = () => {
         setOpenCancelModuleCreation(false);
-        setModuleData({
-            parentModuleCode: parentModuleCode,
-            moduleName: moduleName,
-            level: "",
-            mineType: mineType,
-            duration: '',
-            activities: regenerateCodes(parentModuleCode, editingState?.activities || []).map((activity: any) =>
-                setActivityPrerequisites(activity, activity, { manual: true })
-            )
-        })
+        if (isMDTSContext) {
+            navigate(returnTo);
+            return;
+        }
+
+        setOpenPopup(false);
+        setIsMDTSCreation(false);
+        setModuleType("PERSONAL");
+        setModuleNameError("");
+        resetModuleForm();
     }
 
     const handleCreateNewModule = () => {
@@ -1516,14 +1640,14 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                     <Select
                                                         mode="multiple"
                                                         value={getPrerequisiteCodes(activity)}
-                                                        options={getAllPrerequisites()
-                                                            .filter((code: any) => code !== activity.code)
+                                                        options={getAllPrerequisites(activity)
                                                             .map((code: string) => ({ value: code, label: code }))}
                                                         onChange={(value) => handlePrerequisiteChange(activity.code, value)}
                                                         filterOption={filterPrerequisites}
-                                                        placeholder="Select prerequisite(s)"
+                                                        placeholder={isPrerequisiteLocked(activity) ? "Auto inherited from parent" : "Select prerequisite(s)"}
                                                         style={{ width: '100%' }}
                                                         allowClear
+                                                        disabled={isPrerequisiteLocked(activity)}
                                                     />
                                                 </TableCell>
 

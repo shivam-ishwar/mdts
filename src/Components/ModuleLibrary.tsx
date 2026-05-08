@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Box, IconButton, Tooltip } from "@mui/material";
 import { FilterList } from "@mui/icons-material";
-import { Select, Input, Button, Typography, Modal } from "antd";
-import { SearchOutlined, DeleteOutlined, RobotOutlined, ExclamationCircleOutlined, ApartmentOutlined, ClusterOutlined, UserOutlined, RetweetOutlined } from "@ant-design/icons";
+import { Select, Input, Button, Typography, Modal, Dropdown } from "antd";
+import { SearchOutlined, DeleteOutlined, RobotOutlined, ExclamationCircleOutlined, ApartmentOutlined, ClusterOutlined, UserOutlined, RetweetOutlined, MoreOutlined } from "@ant-design/icons";
 import "../styles/module-library.css";
 import { Link } from "react-router-dom";
 import { getCurrentUser } from '../Utils/moduleStorage';
@@ -363,12 +363,6 @@ const ModuleLibrary = () => {
     );
   };
 
-  const handleConvertToOrgClick = (e: React.MouseEvent, module: Module) => {
-    e.stopPropagation();
-    setSelectedModuleToConvert(module);
-    setIsConvertModalVisible(true);
-  };
-
   const canEditModule = (module: Module) => {
     return module.moduleType == "PERSONAL" || currentUser?.guiId === module.userGuiId;
   };
@@ -397,6 +391,42 @@ const ModuleLibrary = () => {
     } finally {
       setIsConvertModalVisible(false);
       setSelectedModuleToConvert(null);
+    }
+  };
+
+  const getModuleActionItems = (module: Module) => {
+    const items: { key: string; label: string; icon: any; danger?: boolean }[] = [];
+
+    if (module.moduleType === "PERSONAL" || module.userGuiId == currentUser?.guiId) {
+      items.push({
+        key: "delete",
+        label: "Delete",
+        icon: <DeleteOutlined />,
+        danger: true,
+      });
+    }
+
+    if (module.moduleType === "PERSONAL") {
+      items.push({
+        key: "convert",
+        label: "Convert to Organizational",
+        icon: <RetweetOutlined />,
+      });
+    }
+
+    return items;
+  };
+
+  const handleModuleActionClick = ({ key }: { key: string }, module: Module) => {
+    if (key === "delete") {
+      setIsDeleteModuleModalVisible(true);
+      setSelectedModuleId(module.id);
+      return;
+    }
+
+    if (key === "convert") {
+      setSelectedModuleToConvert(module);
+      setIsConvertModalVisible(true);
     }
   };
 
@@ -475,7 +505,7 @@ const ModuleLibrary = () => {
                   <TableCell className="ml-th ml-col-type">Type</TableCell>
                   <TableCell className="ml-th ml-col-date">Created On</TableCell>
                   <TableCell className="ml-th ml-col-mine">Mine Type</TableCell>
-                  <TableCell className="ml-th ml-col-actions">Actions</TableCell>
+                  <TableCell className="ml-th ml-col-actions">&nbsp;</TableCell>
                 </TableRow>
               </TableHead>
 
@@ -496,32 +526,24 @@ const ModuleLibrary = () => {
                       <TableCell className="ml-td ml-col-mine">{module.mineType}</TableCell>
 
                       <TableCell className="ml-td ml-col-actions ml-actions">
-                        {(module.moduleType === "PERSONAL" || module.userGuiId == currentUser.guiId) && (
-                          <Button
-                            icon={<DeleteOutlined />}
-                            type="primary"
-                            danger
-                            size="small"
-                            className="ml-action-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsDeleteModuleModalVisible(true);
-                              setSelectedModuleId(module.id);
+                        {getModuleActionItems(module).length > 0 ? (
+                          <Dropdown
+                            trigger={["hover"]}
+                            menu={{
+                              items: getModuleActionItems(module),
+                              onClick: ({ key }) => handleModuleActionClick({ key }, module),
                             }}
-                          />
-                        )}
-
-                        {module.moduleType === "PERSONAL" && (
-                          <Tooltip title="Convert to Organizational Module">
+                            placement="bottomRight"
+                          >
                             <Button
-                              icon={<RetweetOutlined />}
-                              type="default"
+                              type="text"
                               size="small"
-                              className="ml-action-btn"
-                              onClick={(e) => handleConvertToOrgClick(e, module)}
+                              className="ml-action-menu-btn"
+                              icon={<MoreOutlined />}
+                              onClick={(e) => e.stopPropagation()}
                             />
-                          </Tooltip>
-                        )}
+                          </Dropdown>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))
@@ -547,21 +569,6 @@ const ModuleLibrary = () => {
         </div>
 
         <div className="create-library-section cont-height">
-          <Box className="panel-toolbar">
-            <Input
-              size="small"
-              placeholder="Search..."
-              onChange={handleSearch}
-              prefix={<SearchOutlined />}
-              className="toolbar-input"
-            />
-            <IconButton color="primary" className="toolbar-icon-btn">
-              <FilterList />
-            </IconButton>
-          </Box>
-
-          <div className="panel-divider" />
-
           <div className="panel-scroll">
             {selectedLibrary ? (
               <div className="drop-box" onDragOver={(e) => e.preventDefault()} onDrop={handleDrop}>
@@ -652,7 +659,7 @@ const ModuleLibrary = () => {
                 placeholder="Mine Type"
                 value={newLibraryMineType || undefined}
                 onChange={(value) => setNewLibraryMineType(value)}
-                className="toolbar-select"
+                className="toolbar-select lib-mt-slct"
                 disabled={libraryType == "project"}
               >
                 {mineTypes.map((type: any) => (

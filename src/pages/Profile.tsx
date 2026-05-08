@@ -12,6 +12,13 @@ import { v4 as uuidv4 } from "uuid";
 import "react-phone-input-2/lib/style.css";
 import PhoneInput from "react-phone-input-2";
 import { hasPermission } from "../Utils/auth.ts";
+import {
+    COMPANY_TYPE_OPTIONS,
+    INDUSTRY_TYPE_OPTIONS,
+    OTHER_VALUE,
+    parseStoredCompanyType,
+    parseStoredIndustryType,
+} from "../constants/companyAndIndustryOptions";
 const { Option } = Select;
 
 const Profile = () => {
@@ -22,7 +29,9 @@ const Profile = () => {
         company: null as string | null,
         designation: null as string | null,
         companyType: null as string | null,
+        companyTypeOther: null as string | null,
         industryType: null as string | null,
+        industryTypeOther: null as string | null,
         mobile: null as string | null,
         email: null as string | null,
         whatsapp: null as string | null,
@@ -85,14 +94,25 @@ const Profile = () => {
             const addressLine2 = userData?.address2 ?? companyData?.address2 ?? "";
             const mergedAddress = String(userData?.address ?? `${addressLine1} ${addressLine2}`.trim() ?? "").trim();
 
+            const ctParsed = parseStoredCompanyType(
+                userData.companyType || companyData?.companyType,
+                userData.companyTypeOther ?? companyData?.companyTypeOther
+            );
+            const itParsed = parseStoredIndustryType(
+                userData.industryType || companyData?.industryType,
+                userData.industryTypeOther ?? companyData?.industryTypeOther
+            );
+
             setFormData({
                 id: userData.id || "",
                 name: userData.name || "",
                 guiId: userData.guiId || "",
                 company: userData.company || companyData?.name || companyData?.company || "",
                 designation: userData.designation || "",
-                companyType: userData.companyType || companyData?.companyType || "",
-                industryType: userData.industryType || companyData?.industryType || "",
+                companyType: ctParsed.companyType,
+                companyTypeOther: ctParsed.companyTypeOther,
+                industryType: itParsed.industryType,
+                industryTypeOther: itParsed.industryTypeOther,
                 mobile: userData.mobile || "",
                 email: userData.email || "",
                 whatsapp: userData.whatsapp || "",
@@ -134,6 +154,22 @@ const Profile = () => {
 
     const handleSelectChange = (value: any, name: any) => {
         setFormData((prev: any) => ({ ...prev, [name]: value }));
+    };
+
+    const handleCompanyTypeChange = (value: string) => {
+        setFormData((prev: any) => ({
+            ...prev,
+            companyType: value,
+            companyTypeOther: value === OTHER_VALUE ? prev.companyTypeOther ?? "" : "",
+        }));
+    };
+
+    const handleIndustryTypeChange = (value: string) => {
+        setFormData((prev: any) => ({
+            ...prev,
+            industryType: value,
+            industryTypeOther: value === OTHER_VALUE ? prev.industryTypeOther ?? "" : "",
+        }));
     };
 
     const handleSave = async () => {
@@ -237,14 +273,30 @@ const Profile = () => {
 
     const proceedProfileSave = async (currentUser: any) => {
         try {
+            if (formData.companyType === OTHER_VALUE && !String(formData.companyTypeOther || "").trim()) {
+                notify.error('Please specify the company type when "Other" is selected.');
+                return;
+            }
+            if (formData.industryType === OTHER_VALUE && !String(formData.industryTypeOther || "").trim()) {
+                notify.error('Please specify the industry type when "Other" is selected.');
+                return;
+            }
+
             const users = await db.getUsers();
             const existingUser = users.find((u) => u.id === currentUser.id);
 
             let orgId = currentUser.orgId || formData.orgId || uuidv4();
 
+            const companyTypeOtherStored =
+                formData.companyType === OTHER_VALUE ? String(formData.companyTypeOther || "").trim() : "";
+            const industryTypeOtherStored =
+                formData.industryType === OTHER_VALUE ? String(formData.industryTypeOther || "").trim() : "";
+
             const updatedUser = {
                 ...existingUser,
                 ...formData,
+                companyTypeOther: companyTypeOtherStored,
+                industryTypeOther: industryTypeOtherStored,
                 profilePhoto: existingUser?.profilePhoto || "",
                 isTempPassword: false,
                 orgId,
@@ -262,7 +314,9 @@ const Profile = () => {
                 const newCompany = {
                     name: formData.company,
                     industryType: formData.industryType,
+                    industryTypeOther: industryTypeOtherStored,
                     companyType: formData.companyType,
+                    companyTypeOther: companyTypeOtherStored,
                     city: formData.city,
                     state: formData.state,
                     country: formData.country,
@@ -277,7 +331,9 @@ const Profile = () => {
                     ...existingCompany,
                     name: formData.company,
                     industryType: formData.industryType,
+                    industryTypeOther: industryTypeOtherStored,
                     companyType: formData.companyType,
+                    companyTypeOther: companyTypeOtherStored,
                     city: formData.city,
                     state: formData.state,
                     country: formData.country,
@@ -378,7 +434,7 @@ const Profile = () => {
                                                     value={formData.company}
                                                     onChange={handleInputChange}
                                                     placeholder="Enter Company"
-                                                    disabled={formData.role != "Admin"}
+                                                    disabled={String(formData.role || "").toLowerCase() !== "admin"}
                                                 />
                                             </Form.Item>
                                         </Col>
@@ -389,18 +445,49 @@ const Profile = () => {
                                                 rules={[{ required: true, message: "Please select company type" }]}
                                             >
                                                 <Select
-                                                    value={formData.companyType}
-                                                    onChange={(value) => handleSelectChange(value, "companyType")}
+                                                    value={formData.companyType || undefined}
+                                                    onChange={(value) => handleCompanyTypeChange(value)}
                                                     placeholder="Select Company Type"
                                                     className="profile-full-width"
+                                                    showSearch
+                                                    optionFilterProp="children"
+                                                    disabled={String(formData.role || "").toLowerCase() !== "admin"}
                                                 >
-                                                    <Option value="Mining">Mining</Option>
-                                                    <Option value="Construction">Construction</Option>
-                                                    <Option value="Equipment Supplier">Equipment Supplier</Option>
+                                                    {COMPANY_TYPE_OPTIONS.map((opt) => (
+                                                        <Option key={opt} value={opt}>
+                                                            {opt}
+                                                        </Option>
+                                                    ))}
                                                 </Select>
                                             </Form.Item>
                                         </Col>
                                     </Row>
+
+                                    {formData.companyType === OTHER_VALUE && (
+                                        <Row gutter={[16, 16]} className="form-row">
+                                            <Col span={12} />
+                                            <Col span={12}>
+                                                <Form.Item
+                                                    label="Specify company type"
+                                                    colon={false}
+                                                    rules={[
+                                                        {
+                                                            required: true,
+                                                            message: "Please describe the company type",
+                                                        },
+                                                    ]}
+                                                >
+                                                    <Input
+                                                        name="companyTypeOther"
+                                                        value={formData.companyTypeOther ?? ""}
+                                                        onChange={handleInputChange}
+                                                        placeholder="Enter company type"
+                                                        disabled={String(formData.role || "").toLowerCase() !== "admin"}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                        </Row>
+                                    )}
 
                                     <Row gutter={[16, 16]} className="form-row">
                                         <Col span={12}>
@@ -410,14 +497,19 @@ const Profile = () => {
                                                 rules={[{ required: true, message: "Please select industry type" }]}
                                             >
                                                 <Select
-                                                    value={formData.industryType}
-                                                    onChange={(value) => handleSelectChange(value, "industryType")}
+                                                    value={formData.industryType || undefined}
+                                                    onChange={(value) => handleIndustryTypeChange(value)}
                                                     placeholder="Select Industry Type"
                                                     className="profile-full-width"
+                                                    showSearch
+                                                    optionFilterProp="children"
+                                                    disabled={String(formData.role || "").toLowerCase() !== "admin"}
                                                 >
-                                                    <Option value="Coal">Coal</Option>
-                                                    <Option value="Iron">Iron</Option>
-                                                    <Option value="Gold">Gold</Option>
+                                                    {INDUSTRY_TYPE_OPTIONS.map((opt) => (
+                                                        <Option key={opt} value={opt}>
+                                                            {opt}
+                                                        </Option>
+                                                    ))}
                                                 </Select>
                                             </Form.Item>
                                         </Col>
@@ -440,6 +532,32 @@ const Profile = () => {
                                             </Form.Item>
                                         </Col>
                                     </Row>
+
+                                    {formData.industryType === OTHER_VALUE && (
+                                        <Row gutter={[16, 16]} className="form-row">
+                                            <Col span={12}>
+                                                <Form.Item
+                                                    label="Specify industry"
+                                                    colon={false}
+                                                    rules={[
+                                                        {
+                                                            required: true,
+                                                            message: "Please describe the industry type",
+                                                        },
+                                                    ]}
+                                                >
+                                                    <Input
+                                                        name="industryTypeOther"
+                                                        value={formData.industryTypeOther ?? ""}
+                                                        onChange={handleInputChange}
+                                                        placeholder="Enter industry type"
+                                                        disabled={String(formData.role || "").toLowerCase() !== "admin"}
+                                                    />
+                                                </Form.Item>
+                                            </Col>
+                                            <Col span={12} />
+                                        </Row>
+                                    )}
 
                                     <Row gutter={[16, 16]} className="form-row">
                                         <Col span={12}>

@@ -42,6 +42,8 @@ import ManageRaci from "../pages/ManageRaci";
 import StandardizationLinks from "../pages/StandardizationLinks";
 import Dashboard from "../Components/Dashboard";
 import { userStore } from "../Utils/UserStore";
+import Notepad from "../pages/Notepad";
+import WorkspaceHome from "../pages/WorkspaceHome";
 
 const AppRoutes = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -77,7 +79,7 @@ const AppRoutes = () => {
             <Routes>
                 <Route
                     path="/home"
-                    element={isAuthenticated ? <Navigate to="/knowledge-center" replace /> : <Home />}
+                    element={isAuthenticated ? <Navigate to="/workspace-home" replace /> : <Home />}
                 >
                     <Route index element={<Hero />} />
                     <Route path="services" element={<Services />} />
@@ -89,7 +91,7 @@ const AppRoutes = () => {
                 <Route
                     path="/"
                     element={
-                        isAuthenticated ? <Navigate to="/knowledge-center" replace /> : <Navigate to="/home" replace />
+                        isAuthenticated ? <Navigate to="/workspace-home" replace /> : <Navigate to="/home" replace />
                     }
                 />
 
@@ -102,6 +104,7 @@ const AppRoutes = () => {
                     }
                 >
                     {/* General pages (no special permission, just auth) */}
+                    <Route path="/workspace-home" element={<WorkspaceHome />} />
                     <Route path="/landing-page" element={<LandingPage />} />
                     <Route path="/settings" element={<SettingsAndPrivacy />} />
                     <Route path="/helps" element={<HelpAndSupport />} />
@@ -240,6 +243,15 @@ const AppRoutes = () => {
                         element={
                             <ProtectedRoute action="SET_NOTIFICATIONS">
                                 <NotificationLibrary />
+                            </ProtectedRoute>
+                        }
+                    />
+
+                    <Route
+                        path="/create/notepad"
+                        element={
+                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                                <Notepad />
                             </ProtectedRoute>
                         }
                     />

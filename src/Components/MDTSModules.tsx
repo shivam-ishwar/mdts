@@ -130,103 +130,106 @@ const MDTSModules = () => {
               Create, manage, and maintain the MDTS master modules used for downstream imports.
             </span>
           </div>
-          <Button type="primary" className="btn-primary-sm mdts-heading-cta" icon={<PlusOutlined />} onClick={handleCreate}>
-            Create MDTS Module
-          </Button>
+          <div className="mdts-heading-controls">
+            <Input
+              size="small"
+              placeholder="Search by code, name, mine type, date"
+              prefix={<SearchOutlined />}
+              className="toolbar-input mdts-toolbar-search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+
+            <Select
+              size="small"
+              allowClear
+              placeholder="Mine Type"
+              value={selectedMineType || undefined}
+              className="toolbar-select mdts-toolbar-mine"
+              onChange={(value) => setSelectedMineType(value)}
+              onClear={() => setSelectedMineType("")}
+            >
+              {mineTypes.map((type: any) => (
+                <Option key={type.type} value={type.type}>
+                  {type.type}
+                </Option>
+              ))}
+            </Select>
+
+            <Button type="primary" className="btn-primary-sm mdts-heading-cta" icon={<PlusOutlined />} onClick={handleCreate}>
+              Create MDTS Module
+            </Button>
+          </div>
         </div>
       </div>
 
       <section className="mdts-module-page">
-        <div className="panel-toolbar mdts-toolbar">
-          <div className="mdts-toolbar-copy">
-            <div className="mdts-toolbar-title">MDTS Registry</div>
-            <div className="mdts-toolbar-subtitle">
-              {filteredModules.length} of {modules.length} modules visible
-            </div>
-          </div>
-
-          <Input
-            size="small"
-            placeholder="Search by code, name, mine type, date"
-            prefix={<SearchOutlined />}
-            className="toolbar-input mdts-toolbar-search"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-
-          <Select
-            size="small"
-            allowClear
-            placeholder="Mine Type"
-            value={selectedMineType || undefined}
-            className="toolbar-select mdts-toolbar-mine"
-            onChange={(value) => setSelectedMineType(value)}
-            onClear={() => setSelectedMineType("")}
-          >
-            {mineTypes.map((type: any) => (
-              <Option key={type.type} value={type.type}>
-                {type.type}
-              </Option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="panel-divider" />
-
         <div className="mdts-list-shell">
           {filteredModules.length > 0 ? (
-            <div className="mdts-list-grid">
-              {filteredModules.map((module) => (
-                <article key={module.id} className="mdts-list-card" onClick={() => handleEdit(module)}>
-                  <div className="mdts-list-card-top">
-                    <div className="mdts-list-code">{module.parentModuleCode}</div>
-                    <div className="mdts-list-actions">
-                      <Tooltip title="Edit">
-                        <Button
-                          size="small"
-                          className="ml-action-btn mdts-icon-action"
-                          icon={<EditOutlined />}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleEdit(module);
-                          }}
-                        />
-                      </Tooltip>
-                      <Tooltip title="Delete">
-                        <Button
-                          size="small"
-                          type="primary"
-                          danger
-                          className="ml-action-btn mdts-icon-action"
-                          icon={<DeleteOutlined />}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setModuleToDelete(module);
-                          }}
-                        />
-                      </Tooltip>
-                    </div>
-                  </div>
-
-                  <div className="mdts-list-name">{module.moduleName}</div>
-
-                  <div className="mdts-list-meta">
-                    <div className="mdts-list-meta-item">
-                      <span className="mdts-list-meta-label">Activities</span>
-                      <strong>{Array.isArray(module.activities) ? module.activities.length : 0}</strong>
-                    </div>
-                    <div className="mdts-list-meta-item">
-                      <span className="mdts-list-meta-label">Created</span>
-                      <strong>{module.createdAt ? dayjs(module.createdAt).format("DD MMM YYYY") : "-"}</strong>
-                    </div>
-                  </div>
-
-                  <div className="mdts-list-tags">
-                    <Tag color="green">MDTS</Tag>
-                    {module.mineType ? <Tag>{module.mineType}</Tag> : null}
-                  </div>
-                </article>
-              ))}
+            <div className="mdts-table-wrap">
+              <table className="mdts-table">
+                <thead>
+                  <tr>
+                    <th>Module Code</th>
+                    <th>Module Name</th>
+                    <th>Mine Type</th>
+                    <th>Activities</th>
+                    <th>Created On</th>
+                    <th>Type</th>
+                    <th className="mdts-table-actions-head">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredModules.map((module) => (
+                    <tr
+                      key={module.id}
+                      className="mdts-table-row"
+                      onClick={() => handleEdit(module)}
+                    >
+                      <td>
+                        <span className="mdts-table-code">{module.parentModuleCode}</span>
+                      </td>
+                      <td className="mdts-table-name-cell">
+                        <div className="mdts-table-name">{module.moduleName}</div>
+                      </td>
+                      <td>{module.mineType || "-"}</td>
+                      <td>{Array.isArray(module.activities) ? module.activities.length : 0}</td>
+                      <td>{module.createdAt ? dayjs(module.createdAt).format("DD MMM YYYY") : "-"}</td>
+                      <td>
+                        <Tag color="green">MDTS</Tag>
+                      </td>
+                      <td>
+                        <div className="mdts-table-actions">
+                          <Tooltip title="Edit">
+                            <Button
+                              size="small"
+                              className="ml-action-btn mdts-icon-action"
+                              icon={<EditOutlined />}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleEdit(module);
+                              }}
+                            />
+                          </Tooltip>
+                          <Tooltip title="Delete">
+                            <Button
+                              size="small"
+                              type="primary"
+                              danger
+                              className="ml-action-btn mdts-icon-action"
+                              icon={<DeleteOutlined />}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setModuleToDelete(module);
+                              }}
+                            />
+                          </Tooltip>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="mdts-empty-state">
