@@ -476,10 +476,10 @@ const WorkspaceHome = () => {
     const displayName = String(user?.name || "there").trim() || "there";
     const firstName = displayName.split(/\s+/)[0] || displayName;
     const organizationName = useMemo(() => {
-        const raw = user?.organizationName || user?.orgName || user?.companyName || user?.orgId;
-        if (raw == null || String(raw).trim() === "") return "your organization";
+        const raw = user?.organizationName || user?.orgName || user?.companyName;
+        if (raw == null || String(raw).trim() === "") return "the organization";
         return String(raw).trim();
-    }, [user?.organizationName, user?.orgName, user?.companyName, user?.orgId]);
+    }, [user?.organizationName, user?.orgName, user?.companyName]);
     const profilePhotoSrc = useMemo(() => resolveProfilePhotoSrc(user?.profilePhoto), [user?.profilePhoto]);
     const userInitials = useMemo(() => getDisplayInitials(displayName), [displayName]);
     const [avatarFailed, setAvatarFailed] = useState(false);
@@ -775,11 +775,11 @@ const WorkspaceHome = () => {
                     <div className="wh-section-head wh-section-head--story">
                         <div>
                             <span className="wh-eyebrow">Organization pulse</span>
-                            <h2 className="wh-section-title">A homepage that feels like your platform, not a dashboard</h2>
+                            <h2 className="wh-section-title">A clearer view of your workspace</h2>
                         </div>
                         <p className="wh-section-sub">
-                            {organizationName} can use this space to spotlight priorities, celebrate progress, and guide
-                            teams toward the next action with more clarity and less noise.
+                            {organizationName} can use this space to communicate priorities, share key updates, and help
+                            teams move quickly to the work that matters most.
                         </p>
                     </div>
                 </motion.section>
@@ -892,11 +892,11 @@ const WorkspaceHome = () => {
                     <div className="wh-section-head wh-section-head--split">
                         <div>
                             <span className="wh-eyebrow">Featured initiatives</span>
-                            <h2 className="wh-section-title">Focus areas worth surfacing after login</h2>
+                            <h2 className="wh-section-title">Key focus areas</h2>
                         </div>
                         <p className="wh-section-sub">
-                            These sections give the homepage more narrative value by highlighting how the organization is
-                            working, not just where to click next.
+                            Highlight important programs, shared standards, and operational priorities in a format that
+                            feels structured, current, and easy to scan.
                         </p>
                     </div>
                     <div className="wh-initiative-grid">
@@ -936,10 +936,10 @@ const WorkspaceHome = () => {
                         className="wh-section-head"
                     >
                         <span className="wh-eyebrow">Workstreams</span>
-                        <h2 className="wh-section-title">Move from welcome to action without losing the premium feel</h2>
+                        <h2 className="wh-section-title">Core workspaces</h2>
                         <p className="wh-section-sub">
-                            Role-aware shortcuts still matter. The difference is that they now sit inside a more curated
-                            section that feels like a product landing page for internal teams.
+                            Role-based access remains central, with the most important destinations presented in a cleaner
+                            and more intentional layout.
                         </p>
                     </div>
                     <div className="wh-workstreams-grid">
@@ -1016,10 +1016,9 @@ const WorkspaceHome = () => {
                     transition={{ duration: 0.45, ease: easeSmooth }}
                 >
                     <span className="wh-eyebrow">Connected experience</span>
-                    <h2 className="wh-section-title">Keep people close to the organization, not just the tooling</h2>
+                    <h2 className="wh-section-title">Stay connected to the organization</h2>
                     <p className="wh-section-sub">
-                        A modern internal homepage should balance execution updates with a sense of shared mission,
-                        support, and momentum.
+                        Balance operational visibility with communication, support, and shared context across teams.
                     </p>
                 </motion.div>
 
