@@ -417,7 +417,12 @@ const ModuleLibrary = () => {
     return items;
   };
 
-  const handleModuleActionClick = ({ key }: { key: string }, module: Module) => {
+  const handleModuleActionClick = (
+    { key, domEvent }: { key: string; domEvent?: { stopPropagation?: () => void } },
+    module: Module
+  ) => {
+    domEvent?.stopPropagation?.();
+
     if (key === "delete") {
       setIsDeleteModuleModalVisible(true);
       setSelectedModuleId(module.id);
@@ -531,7 +536,7 @@ const ModuleLibrary = () => {
                             trigger={["hover"]}
                             menu={{
                               items: getModuleActionItems(module),
-                              onClick: ({ key }) => handleModuleActionClick({ key }, module),
+                              onClick: ({ key, domEvent }) => handleModuleActionClick({ key, domEvent }, module),
                             }}
                             placement="bottomRight"
                           >

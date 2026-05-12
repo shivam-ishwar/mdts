@@ -16,7 +16,14 @@ import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { ToastContainer } from "react-toastify";
 import { hasPermission } from "../Utils/auth.ts";
-import { formatPrerequisiteCodes, getPrerequisiteCodes, setActivityPrerequisites } from "../Utils/prerequisites";
+import {
+    formatPrerequisiteCodes,
+    getInvalidPrerequisiteCodes,
+    getPrerequisiteCodes,
+    setActivityPrerequisites,
+    shouldEnforcePrerequisiteSequence,
+    validateActivityPrerequisites
+} from "../Utils/prerequisites";
 const Module = () => {
     const location = useLocation();
     const state = (location.state as any) ?? null;
@@ -836,14 +843,34 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         const activities = moduleData?.activities || [];
         const locked = isPrerequisiteLocked(activity);
         if (locked) return [];
+        const enforceSequence = shouldEnforcePrerequisiteSequence(moduleData, activity);
+        const candidateCodes = activities.map((row: any) => row.code);
+        const { invalidSelf, invalidFuture, invalidCircular } = getInvalidPrerequisiteCodes({
+            activities,
+            activityCode: activity?.code,
+            selectedPrerequisites: candidateCodes,
+            enforceSequence
+        });
+        const invalidCodes = new Set([...invalidSelf, ...invalidFuture, ...invalidCircular]);
         return activities
             .map((row: any) => row.code)
-            .filter((code: any) => code !== activity?.code);
+            .filter((code: any) => !invalidCodes.has(code));
     };
 
     const handlePrerequisiteChange = (activityCode: any, value: any) => {
         const target = (moduleData?.activities || []).find((activity: any) => activity.code === activityCode);
         if (!target || isPrerequisiteLocked(target)) return;
+
+        const validation = validateActivityPrerequisites({
+            activities: moduleData?.activities || [],
+            activityCode,
+            selectedPrerequisites: value,
+            enforceSequence: shouldEnforcePrerequisiteSequence(moduleData, target)
+        });
+        if (!validation.valid) {
+            notify.error(validation.message);
+            return;
+        }
 
         const updatedActivities = moduleData.activities.map((activity: any) =>
             activity.code === activityCode ? setActivityPrerequisites(activity, value, { manual: true }) : activity

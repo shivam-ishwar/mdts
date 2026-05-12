@@ -15,7 +15,15 @@ import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { Box } from "@mui/material";
 import { v4 as uuidv4 } from 'uuid';
-import { formatPrerequisiteCodes, getPrerequisiteCodes, hasPrerequisites, setActivityPrerequisites } from "../Utils/prerequisites";
+import {
+  formatPrerequisiteCodes,
+  getInvalidPrerequisiteCodes,
+  getPrerequisiteCodes,
+  hasPrerequisites,
+  setActivityPrerequisites,
+  shouldEnforcePrerequisiteSequence,
+  validateActivityPrerequisites
+} from "../Utils/prerequisites";
 interface Activity {
   code: string;
   activityName: string;
@@ -141,6 +149,56 @@ const TimeBuilder = () => {
   const [userOptions, setUserOptions] = useState<any>([]);
   const queryParams = new URLSearchParams(location.search);
   const projectIdForTimeline = queryParams.get("projectId");
+
+  const getAllowedPrerequisiteOptions = (activityCode: string, activities: any[], context?: any) => {
+    const candidateCodes = activities.map((activity: any) => activity.code);
+    const enforceSequence = shouldEnforcePrerequisiteSequence(context, { code: activityCode });
+    const { invalidSelf, invalidFuture, invalidCircular } = getInvalidPrerequisiteCodes({
+      activities,
+      activityCode,
+      selectedPrerequisites: candidateCodes,
+      enforceSequence,
+    });
+    const invalidCodes = new Set([...invalidSelf, ...invalidFuture, ...invalidCircular]);
+
+    return activities
+      .filter((activity: any) => !invalidCodes.has(activity.code))
+      .map((activity: any) => ({
+        value: activity.code,
+        label: activity.code,
+      }));
+  };
+
+  const updateActivityPrerequisites = (activityCode: string, value: any) => {
+    const allActivities = sequencedModules.flatMap((module: any) => module.activities || []);
+    const targetActivity = allActivities.find((activity: any) => activity.code === activityCode);
+    const targetModule = sequencedModules.find((module: any) =>
+      (module.activities || []).some((activity: any) => activity.code === activityCode)
+    );
+
+    const validation = validateActivityPrerequisites({
+      activities: allActivities,
+      activityCode,
+      selectedPrerequisites: value,
+      enforceSequence: shouldEnforcePrerequisiteSequence(targetModule, targetActivity),
+    });
+
+    if (!validation.valid) {
+      notify.error(validation.message);
+      return;
+    }
+
+    setSequencedModules((prevModules: any) =>
+      prevModules.map((module: any) => ({
+        ...module,
+        activities: module.activities.map((activity: any) =>
+          activity.code == activityCode
+            ? setActivityPrerequisites(activity, value, { manual: true })
+            : activity
+        ),
+      }))
+    );
+  };
 
   const resolveSelectedProject = () => {
     if (selectedProjectId) {
@@ -1489,29 +1547,19 @@ const TimeBuilder = () => {
                 showSearch
                 placeholder="Select prerequisite(s)"
                 value={getPrerequisiteCodes(record)}
-                onChange={(value) => {
-                  setSequencedModules((prevModules: any) =>
-                    prevModules.map((module: any) => ({
-                      ...module,
-                      activities: module.activities.map((activity: any) =>
-                        activity.code == record.code
-                          ? setActivityPrerequisites(activity, value, { manual: true })
-                          : activity
-                      ),
-                    }))
-                  );
-                }}
+                onChange={(value) => updateActivityPrerequisites(record.code, value)}
                 disabled={isDisabled}
                 filterOption={(input: any, option: any) =>
                   option?.label?.toLowerCase().includes(input.toLowerCase())
                 }
-                options={sequencedModules.flatMap((module) =>
-                  module.activities
-                    .filter((activity) => activity.activityStatus !== "completed" && activity.code !== record.code)
-                    .map((activity) => ({
-                      value: activity.code,
-                      label: activity.code,
-                    }))
+                options={getAllowedPrerequisiteOptions(
+                  record.code,
+                  sequencedModules.flatMap((module) =>
+                    (module.activities || []).filter((activity) => activity.activityStatus !== "completed")
+                  ),
+                  sequencedModules.find((module) =>
+                    (module.activities || []).some((activity) => activity.code === record.code)
+                  )
                 )}
                 style={{ width: "95%" }}
                 allowClear
@@ -2579,6 +2627,18 @@ const TimeBuilder = () => {
         holidays: [],
       }, prerequisite, { manual: true });
 
+      const validation = validateActivityPrerequisites({
+        activities,
+        activityCode: newCode,
+        selectedPrerequisites: prerequisite,
+        enforceSequence: shouldEnforcePrerequisiteSequence(module, newActivity),
+      });
+
+      if (!validation.valid) {
+        notify.error(validation.message);
+        return;
+      }
+
       const updatedSequenced = sequencedModules.map((m: any) =>
         m.parentModuleCode === activeModuleId
           ? { ...m, activities: [...(m.activities || []), newActivity] }
@@ -3273,18 +3333,24 @@ const TimeBuilder = () => {
               mode="multiple"
               placeholder="Select prerequisite activity(s)"
               allowClear
-            >
-              {(() => {
+              options={(() => {
                 const module = sequencedModules.find(
                   (m: any) => m.parentModuleCode === activeModuleId
                 );
                 const activities = module?.activities || [];
-                return activities.map((act: any) => (
-                  <Select.Option key={act.code} value={act.code}>
-                    {act.code}
-                  </Select.Option>
-                ));
+                const nextCode = activities.length
+                  ? (() => {
+                    const lastCode = activities[activities.length - 1]?.code || "";
+                    const parts = lastCode.split("/");
+                    const prefix = parts.slice(0, -1).join("/") || activeModuleId || "";
+                    const lastNum = parseInt(parts[parts.length - 1], 10);
+                    return !isNaN(lastNum) ? `${prefix}/${lastNum + 10}` : `${activeModuleId}/10`;
+                  })()
+                  : `${activeModuleId}/10`;
+
+                return getAllowedPrerequisiteOptions(nextCode, activities, module);
               })()}
+            >
             </Select>
           </Form.Item>
         </Form>
