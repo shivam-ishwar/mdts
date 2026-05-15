@@ -188,16 +188,16 @@ const TimeBuilder = () => {
       return;
     }
 
-    setSequencedModules((prevModules: any) =>
-      prevModules.map((module: any) => ({
-        ...module,
-        activities: module.activities.map((activity: any) =>
-          activity.code == activityCode
-            ? setActivityPrerequisites(activity, value, { manual: true })
-            : activity
-        ),
-      }))
-    );
+    const updatedModules = sequencedModules.map((module: any) => ({
+      ...module,
+      activities: (module.activities || []).map((activity: any) =>
+        activity.code == activityCode
+          ? setActivityPrerequisites({ ...activity }, value, { manual: true })
+          : { ...activity }
+      ),
+    }));
+
+    commitTimelineState(recalculateTimeline(updatedModules));
   };
 
   const resolveSelectedProject = () => {
@@ -281,13 +281,9 @@ const TimeBuilder = () => {
   }, [modules]);
 
   useEffect(() => {
-    finalData.forEach((module) => {
-      module.activities.forEach((activity) => {
-        if (activity.start) {
-          handleStartDateChange(activity.code, activity.start);
-        }
-      });
-    });
+    if (!sequencedModules.length) return;
+    const recalculated = recalculateTimeline(sequencedModules);
+    commitTimelineState(recalculated);
   }, [isSaturdayWorking, isSundayWorking, finalHolidays]);
 
   const fetchHolidays = async () => {
@@ -315,7 +311,7 @@ const TimeBuilder = () => {
   };
 
   useEffect(() => {
-    if (currentStep == 6) {
+    if (currentStep == 7) {
       setExpandedKeys(finalData.map((_, index) => `module-${index}`));
       const finDataSource = sequencedModules.map((module: any, moduleIndex: number) => {
         return {
@@ -643,49 +639,157 @@ const TimeBuilder = () => {
     return { date: finalDate, holidays };
   };
 
-  const handleStartDateChange = (code: any, dateVal: any) => {
-    let updatedFinalData = [...finalData];
-    let updatedSequencedModules = [...sequencedModules];
+  const isBlockedWorkingDate = (value: any) => {
+    if (!value) return false;
 
-    const startISO = toISODateOnly(dateVal);
+    const currentDate = ensureDate(value);
+    const day = currentDate.getDay();
+    const isoDate = toISODateOnly(currentDate);
 
-    function updateActivities(activities: any) {
-      return activities.map((activity: any) => {
-        if (activity.code == code) {
-          const duration = parseInt(activity.duration, 10) || 0;
-          const { date: endISO, holidays } = addBusinessDays(startISO, duration);
+    if (day === 6 && !isSaturdayWorking) return true;
+    if (day === 0 && !isSundayWorking) return true;
 
-          activity.start = startISO;         // YYYY-MM-DD
-          activity.end = endISO;             // YYYY-MM-DD
-          activity.holidays = holidays;
-          activity.saturdayWorking = isSaturdayWorking;
-          activity.sundayWorking = isSundayWorking;
+    return (finalHolidays || []).some((holiday: any) => {
+      try {
+        const fromDate = toISODateOnly(holiday.from);
+        const toDate = holiday.to ? toISODateOnly(holiday.to) : fromDate;
+        return isoDate >= fromDate && isoDate <= toDate;
+      } catch {
+        return false;
+      }
+    });
+  };
 
-          updateDependentActivities(activity.code, endISO);
-        }
-        return activity;
-      });
-    }
+  const normalizeActivity = (activity: any) => {
+    const normalized = setActivityPrerequisites(
+      { ...activity },
+      getPrerequisiteCodes(activity),
+      { manual: activity?.prerequisiteTouched ?? false }
+    );
 
-    updatedFinalData = updatedFinalData.map((module) => ({
-      ...module,
-      activities: updateActivities(module.activities),
-    }));
+    return {
+      ...normalized,
+      slack: normalized.slack ?? "0",
+      duration: normalized.duration ?? "0",
+    };
+  };
 
-    updatedSequencedModules = updatedSequencedModules.map((module) => ({
+  const normalizeModules = (modulesInput: any[] = []) =>
+    (modulesInput || []).map((module: any) => ({
       ...module,
       saturdayWorking: isSaturdayWorking,
       sundayWorking: isSundayWorking,
-      activities: updateActivities(module.activities),
+      activities: (module.activities || []).map((activity: any) => normalizeActivity(activity)),
     }));
 
-    setFinalData(updatedFinalData);
-    setSequencedModules(updatedSequencedModules);
+  const getLatestDate = (dates: string[]) =>
+    dates.reduce<string | null>((latest, current) => {
+      if (!latest) return current;
+      return dayjs(current).isAfter(dayjs(latest)) ? current : latest;
+    }, null);
+
+  const recalculateTimeline = (modulesInput: any[] = []) => {
+    const normalizedModules = normalizeModules(modulesInput);
+    const activityByCode = new Map<string, any>();
+
+    normalizedModules.forEach((module: any) => {
+      (module.activities || []).forEach((activity: any) => {
+        activityByCode.set(activity.code, activity);
+      });
+    });
+
+    normalizedModules.forEach((module: any) => {
+      (module.activities || []).forEach((activity: any) => {
+        if (activity.activityStatus == "completed" || activity.fin_status == "completed") {
+          return;
+        }
+
+        const prerequisiteCodes = getPrerequisiteCodes(activity);
+        const duration = parseInt(activity.duration, 10) || 0;
+
+        if (prerequisiteCodes.length > 0) {
+          const prerequisiteEndDates = prerequisiteCodes
+            .map((code) => activityByCode.get(code)?.end)
+            .filter(Boolean);
+
+          if (prerequisiteEndDates.length !== prerequisiteCodes.length) {
+            activity.start = null;
+            activity.end = null;
+            activity.holidays = [];
+            return;
+          }
+
+          const latestPrerequisiteEnd = getLatestDate(prerequisiteEndDates);
+          if (!latestPrerequisiteEnd) {
+            activity.start = null;
+            activity.end = null;
+            activity.holidays = [];
+            return;
+          }
+
+          const slack = parseInt(activity.slack, 10) || 0;
+          const { date: startISO, holidays: slackHolidays } = addBusinessDays(latestPrerequisiteEnd, slack + 1);
+          const { date: endISO, holidays: durationHolidays } = addBusinessDays(startISO, duration);
+
+          activity.start = startISO;
+          activity.end = endISO;
+          activity.holidays = [...slackHolidays, ...durationHolidays];
+          return;
+        }
+
+        if (activity.start) {
+          const startISO = toISODateOnly(activity.start);
+          const { date: endISO, holidays } = addBusinessDays(startISO, duration);
+          activity.start = startISO;
+          activity.end = endISO;
+          activity.holidays = holidays;
+          return;
+        }
+
+        activity.end = null;
+        activity.holidays = [];
+      });
+    });
+
+    return normalizedModules;
+  };
+
+  const commitTimelineState = (modulesInput: any[] = []) => {
+    setModules(modulesInput);
+    setSequencedModules(modulesInput);
+    setFinalData(modulesInput);
+    setActivitiesData(modulesInput.flatMap((module: any) => module.activities || []));
+  };
+
+  const removePrerequisiteReferences = (modulesInput: any[] = [], removedCodes: string[] = []) => {
+    const removedSet = new Set(removedCodes);
+
+    return (modulesInput || []).map((module: any) => ({
+      ...module,
+      activities: (module.activities || []).map((activity: any) => {
+        const filteredCodes = getPrerequisiteCodes(activity).filter((code) => !removedSet.has(code));
+        return setActivityPrerequisites(
+          { ...activity },
+          filteredCodes,
+          { manual: activity?.prerequisiteTouched ?? false }
+        );
+      }),
+    }));
+  };
+
+  const handleStartDateChange = (code: any, dateVal: any) => {
+    const startISO = toISODateOnly(dateVal);
+    const updatedModules = sequencedModules.map((module: any) => ({
+      ...module,
+      activities: (module.activities || []).map((activity: any) =>
+        activity.code == code ? { ...activity, start: startISO } : { ...activity }
+      ),
+    }));
+
+    commitTimelineState(recalculateTimeline(updatedModules));
   };
 
   const handleSlackChange = (code: any, newSlack: any) => {
-    let updatedFinalData = [...finalData];
-    let updatedSequencedModules = [...sequencedModules];
     const targetActivity = sequencedModules
       .flatMap((module: any) => module.activities || [])
       .find((activity: any) => activity.code == code);
@@ -701,52 +805,19 @@ const TimeBuilder = () => {
       notify.warning("Slack cannot be greater than the activity duration.");
     }
 
-    function updateActivities(activities: any) {
-      return activities.map((activity: any) => {
-        if (activity.activityStatus == "completed" || activity.fin_status == "completed") return activity;
+    const updatedModules = sequencedModules.map((module: any) => ({
+      ...module,
+      activities: (module.activities || []).map((activity: any) =>
+        activity.code == code ? { ...activity, slack: normalizedSlack } : { ...activity }
+      ),
+    }));
 
-        if (activity.code == code) {
-          activity.slack = normalizedSlack;
-          if (normalizedSlack === "-") {
-            return activity;
-          }
-
-          const prerequisiteCodes = getPrerequisiteCodes(activity);
-          const preEnd = prerequisiteCodes.length
-            ? getActivityEndDate(prerequisiteCodes)
-            : (activity.start || null);
-
-          const preEndISO = preEnd ? toISODateOnly(preEnd) : null;
-          if (!preEndISO) return activity; // cannot compute yet
-
-          const slackDays = parseInt(normalizedSlack, 10) || 0;
-          const { date: startISO, holidays: slackH } = addBusinessDays(preEndISO, slackDays + 1);
-
-          const duration = parseInt(activity.duration, 10) || 0;
-          const { date: endISO, holidays: durH } = addBusinessDays(startISO, duration);
-
-          activity.start = startISO;
-          activity.end = endISO;
-          activity.holidays = [...slackH, ...durH];
-
-          updateDependentActivities(activity.code, endISO);
-        }
-        return activity;
-      });
+    if (normalizedSlack === "-") {
+      commitTimelineState(updatedModules);
+      return;
     }
 
-    updatedFinalData = updatedFinalData.map((module) => ({
-      ...module,
-      activities: updateActivities(module.activities),
-    }));
-
-    updatedSequencedModules = updatedSequencedModules.map((module) => ({
-      ...module,
-      activities: updateActivities(module.activities),
-    }));
-
-    setFinalData(updatedFinalData);
-    setSequencedModules(updatedSequencedModules);
+    commitTimelineState(recalculateTimeline(updatedModules));
   };
 
   const normalizeSlackInput = (rawValue: string): string => {
@@ -758,106 +829,15 @@ const TimeBuilder = () => {
     return `${isNegative ? "-" : ""}${digits}`;
   };
 
-  const updateDependentActivities = (prerequisiteCode: any, prerequisiteEndDate: any) => {
-    let updatedFinalData = [...finalData];
-    let updatedSequencedModules = [...sequencedModules];
-
-    const prereqEndISO = toISODateOnly(prerequisiteEndDate);
-
-    function updateActivities(activities: any) {
-      return activities.map((activity: any) => {
-        if (getPrerequisiteCodes(activity).includes(prerequisiteCode)) {
-          const slack = parseInt(activity.slack, 10) || 0;
-          const latestPrerequisiteEnd = getActivityEndDate(getPrerequisiteCodes(activity)) || prereqEndISO;
-          const { date: startISO, holidays: slackH } = addBusinessDays(toISODateOnly(latestPrerequisiteEnd), slack + 1);
-
-          const duration = parseInt(activity.duration, 10) || 0;
-          const { date: endISO, holidays: durH } = addBusinessDays(startISO, duration);
-
-          activity.start = startISO;
-          activity.end = endISO;
-          activity.holidays = [...slackH, ...durH];
-          activity.saturdayWorking = isSaturdayWorking;
-          activity.sundayWorking = isSundayWorking;
-
-          updateDependentActivities(activity.code, endISO);
-        }
-        return activity;
-      });
-    }
-
-    updatedFinalData = updatedFinalData.map((module) => ({
-      ...module,
-      activities: updateActivities(module.activities),
-    }));
-
-    updatedSequencedModules = updatedSequencedModules.map((module) => ({
-      ...module,
-      saturdayWorking: isSaturdayWorking,
-      sundayWorking: isSundayWorking,
-      activities: updateActivities(module.activities),
-    }));
-
-    setFinalData(updatedFinalData);
-    setSequencedModules(updatedSequencedModules);
-  };
-
   const handleDurationChange = (code: any, newDuration: any) => {
-    let updatedFinalData = [...finalData];
-    let updatedSequencedModules = [...sequencedModules];
-
-    function updateActivities(activities: any) {
-      return activities.map((activity: any) => {
-        if (activity.activityStatus == "completed" || activity.fin_status == "completed") {
-          return activity;
-        }
-
-        if (activity.code == code) {
-          activity.duration = newDuration;
-          if (activity.start && !isUpdateMode && !isReplanMode) {
-            const startDate = activity.start;
-            const duration = parseInt(newDuration, 10) || 0;
-
-            const { date: endDate, holidays: durationHolidays } = addBusinessDays(startDate, duration);
-
-            activity.end = endDate;
-            activity.holidays = [...(activity.holidays || []), ...durationHolidays];
-
-            updateDependentActivities(activity.code, endDate);
-          }
-        }
-
-        return activity;
-      });
-    }
-
-    updatedFinalData = updatedFinalData.map((module) => ({
+    const updatedModules = sequencedModules.map((module: any) => ({
       ...module,
-      activities: updateActivities(module.activities),
+      activities: (module.activities || []).map((activity: any) =>
+        activity.code == code ? { ...activity, duration: newDuration } : { ...activity }
+      ),
     }));
 
-    updatedSequencedModules = updatedSequencedModules.map((module) => ({
-      ...module,
-      activities: updateActivities(module.activities),
-    }));
-
-    setFinalData(updatedFinalData);
-    setSequencedModules(updatedSequencedModules);
-  };
-
-  const getActivityEndDate = (prerequisiteCode: any) => {
-    const codes = getPrerequisiteCodes(prerequisiteCode);
-    let endDate: string | null = null;
-    finalData.forEach((module) => {
-      module.activities.forEach((activity) => {
-        if (codes.includes(activity.code) && activity.end) {
-          if (!endDate || dayjs(activity.end).isAfter(dayjs(endDate))) {
-            endDate = activity.end;
-          }
-        }
-      });
-    });
-    return endDate;
+    commitTimelineState(recalculateTimeline(updatedModules));
   };
 
   // const handleActivitySelection = (activityCode: string, isChecked: boolean) => {
@@ -1112,18 +1092,15 @@ const TimeBuilder = () => {
 
   const handleLibraryChange = (libraryItems: any) => {
     if (libraryItems) {
-      setSequencedModules(libraryItems);
-      setModules(libraryItems);
-      const allActivityCodes = libraryItems.flatMap((module: any) =>
+      const recalculated = recalculateTimeline(libraryItems);
+      commitTimelineState(recalculated);
+      const allActivityCodes = recalculated.flatMap((module: any) =>
         module.activities.map((activity: any) => activity.code)
       );
 
-      setActivitiesData(libraryItems.flatMap((module: any) => module.activities));
       setSelectedActivities(allActivityCodes);
-
     } else {
-      setSequencedModules([]);
-      setModules([]);
+      commitTimelineState([]);
       setActivitiesData([]);
       setSelectedActivities([]);
     }
@@ -1385,10 +1362,11 @@ const TimeBuilder = () => {
   const getColumnsForStep = (step: number) => {
     const baseColumns: any = [
       {
-        title: "Code",
+        title: <div style={{ textAlign: "left" }}>Code</div>,
         dataIndex: "code",
         key: "code",
         align: "left",
+        width: step >= 3 ? "14%" : "18%",
         render: (_: any, record: any) => (
           <span className={record.activityStatus == "completed" ? "completed-field" : ""}>
             {record.code}
@@ -1396,10 +1374,11 @@ const TimeBuilder = () => {
         ),
       },
       {
-        title: "Activity Name",
+        title: <div style={{ textAlign: "left" }}>Activity Name</div>,
         dataIndex: "activityName",
         key: "activityName",
         align: "left",
+        width: step >= 3 ? "34%" : "54%",
         render: (text: any, record: any) => (
           <span className={record.activityStatus == "completed" ? "completed-field" : ""}>
             {text}
@@ -1407,29 +1386,11 @@ const TimeBuilder = () => {
         ),
       },
       {
-        title: "Risk Factor",
-        dataIndex: "controllabilityFactor",
-        key: "controllabilityFactor",
-        align: "center",
-        render: (value: string) => {
-          if (!value) return <span style={{ color: "#8c8c8c" }}>Not Set</span>;
-          const colorMap: Record<string, string> = {
-            High: "#cf1322",
-            Medium: "#d46b08",
-            Low: "#389e0d",
-          };
-          return (
-            <span style={{ fontWeight: 700, color: colorMap[String(value)] || "#595959" }}>
-              {String(value)}
-            </span>
-          );
-        },
-      },
-      {
-        title: "Duration",
+        title: <div style={{ textAlign: "left" }}>Duration</div>,
         dataIndex: "duration",
         key: "duration",
         align: "center",
+        width: step >= 3 ? "12%" : "20%",
         render: (_duration: any, record: any) => {
           const isDisabled =
             record.activityStatus == "completed" ||
@@ -1507,6 +1468,7 @@ const TimeBuilder = () => {
       baseColumns.push({
         key: "delete-activity",
         align: "right",
+        width: "8%",
         className: step == 2 ? "active-column" : "",
         onCell: () => ({ className: step == 2 ? "first-column-red" : "" }),
         render: (_: any, record: any) => {
@@ -1516,7 +1478,7 @@ const TimeBuilder = () => {
             record.fin_status === "completed";
 
           return (
-            <div style={{ marginRight: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
               <Tooltip title={disabled ? "" : "Delete this activity"}>
                 <Button
                   type="link"
@@ -1534,7 +1496,9 @@ const TimeBuilder = () => {
 
     if (step >= 3) {
       baseColumns.push({
+        title: <div style={{ textAlign: "left" }}>Prerequisite</div>,
         key: "prerequisite",
+        width: "40%",
         className: step == 2 ? "active-column" : "",
         render: (_: any, record: any) => {
           const isDisabled = step !== 3 || record.activityStatus == "completed";
@@ -1572,7 +1536,9 @@ const TimeBuilder = () => {
 
     if (step >= 4) {
       baseColumns.push({
+        title: <div style={{ textAlign: "left" }}>Slack</div>,
         key: "slack",
+        width: 180,
         className: step == 3 ? "active-column" : "",
         render: (_: any, record: any) => {
           const isDisabled = step !== 4 || record.activityStatus == "completed";
@@ -1609,15 +1575,17 @@ const TimeBuilder = () => {
       });
     }
 
-    if (step >= 5) {
+    if (step >= 6) {
       baseColumns.push({
+        title: <div style={{ textAlign: "left" }}>Start Date</div>,
         key: "start",
-        className: step == 5 ? "active-column" : "",
+        width: 220,
+        className: step == 6 ? "active-column" : "",
         render: (_: any, record: any) => {
           const hasPrerequisite = hasPrerequisites(record);
           const isDisabled =
-            step !== 5 || record.activityStatus == "completed" || hasPrerequisite;
-          const datePickerClass = step == 5 && !isDisabled ? "highlighted-datepicker" : "";
+            step !== 6 || record.activityStatus == "completed" || hasPrerequisite;
+          const datePickerClass = step == 6 && !isDisabled ? "highlighted-datepicker" : "";
 
           return (
             <div className={datePickerClass}>
@@ -1627,6 +1595,7 @@ const TimeBuilder = () => {
                   record.start ? dayjs(record.start) : null
                 }
                 onChange={(date) => handleStartDateChange(record.code, date)}
+                disabledDate={(current) => isBlockedWorkingDate(current?.toDate?.() || current)}
                 disabled={isDisabled}
                 style={{ width: "95%" }}
                 format="DD-MM-YYYY"
@@ -1705,21 +1674,24 @@ const TimeBuilder = () => {
   const getOuterTableColumns = (step: number): Column[] => {
     let columns: Column[] = [
       {
-        title: "Code",
+        title: <div style={{ textAlign: "left" }}>Code</div>,
         dataIndex: "code",
         key: "code",
+        width: step === 2 ? "18%" : step === 3 ? "14%" : "16%",
         render: (_: any, record: any) => record.parentModuleCode || record.code,
       },
       {
-        title: "Key Activity",
+        title: <div style={{ textAlign: "left" }}>Key Activity</div>,
         dataIndex: "moduleName",
         key: "moduleName",
+        width: step === 2 ? "54%" : step === 3 ? "34%" : "36%",
       },
       {
-        title: "Duration",
+        title: <div style={{ textAlign: "left" }}>Duration</div>,
         dataIndex: "duration",
         key: "duration",
         align: "center",
+        width: step === 2 ? "20%" : step === 3 ? "12%" : "16%",
         render: (_duration: any, record: any) => {
           const totalDuration = (record.activities || []).reduce((sum: number, activity: any) => {
             const value = Number(activity.duration);
@@ -1728,54 +1700,45 @@ const TimeBuilder = () => {
           return `${totalDuration}`;
         },
       },
-      {
-        title: "Actual Duration",
-        dataIndex: "actualDuration",
-        key: "actualDuration",
-        align: "center",
-        render: (_actualDuration: any, record: any) => {
-          const totalActualDuration = (record.activities || []).reduce((sum: number, activity: any) => {
-            const value = Number(activity.actualDuration);
-            return Number.isFinite(value) ? sum + value : sum;
-          }, 0);
-          return `${totalActualDuration}`;
-        },
-      },
     ];
 
     if (step == 2 && (isUpdateMode || isReplanMode)) {
       columns.push({
-        title: "Status",
+        title: <div style={{ textAlign: "left" }}>Status</div>,
         dataIndex: "activityStatus",
         key: "activityStatus",
         align: "center",
+        width: "12%",
         render: (text: any) => <span style={{ fontWeight: 'bold' }}>{text}</span>,
       },);
     }
 
     if (step >= 3) {
       columns.push({
-        title: "Prerequisite",
+        title: <div style={{ textAlign: "left" }}>Prerequisite</div>,
         dataIndex: "prerequisite",
         key: "prerequisite",
         align: "center",
+        width: step === 3 ? "40%" : "20%",
         render: (_: any, record: any) => formatPrerequisiteCodes(record),
       });
     }
 
     if (step >= 4) {
       columns.push({
-        title: "Slack",
+        title: <div style={{ textAlign: "left" }}>Slack</div>,
         dataIndex: "slack",
         key: "slack",
+        width: "10%",
       });
     }
 
-    if (step >= 5) {
+    if (step >= 6) {
       columns.push({
-        title: "Start Date",
+        title: <div style={{ textAlign: "left" }}>Start Date</div>,
         dataIndex: "startDate",
         key: "startDate",
+        width: "14%",
       });
     }
 
@@ -1791,38 +1754,38 @@ const TimeBuilder = () => {
 
     if (hasStatus && step != 2) {
       columns.push({
-        title: "Status",
+        title: <div style={{ textAlign: "left" }}>Status</div>,
         dataIndex: "status",
         key: "status",
+        width: "12%",
       });
     }
 
     if (hasActualStart && step != 2) {
       columns.push({
-        title: "Actual Start",
+        title: <div style={{ textAlign: "left" }}>Actual Start</div>,
         dataIndex: "actualStart",
         key: "actualStart",
+        width: "12%",
       });
     }
 
     if (hasActualFinish && step != 2) {
       columns.push({
-        title: "Actual Finish",
+        title: <div style={{ textAlign: "left" }}>Actual Finish</div>,
         dataIndex: "actualFinish",
         key: "actualFinish",
+        width: "12%",
       });
     }
 
     if (step == 2) {
       columns.push({
-        title: (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginRight: "20px" }}>
-            <span>Actions</span>
-          </div>
-        ),
+        title: <div style={{ textAlign: "left" }}>Actions</div>,
         dataIndex: "actions",
         key: "actions",
-        align: "center",
+        align: "left",
+        width: "8%",
         render: (_text: any, record: any) => {
           const disabled =
             record.activities?.some((activity: any) =>
@@ -1835,7 +1798,7 @@ const TimeBuilder = () => {
             );
 
           return (
-            <div style={{ display: "flex", justifyContent: "flex-end", width: "100%" }}>
+            <div style={{ display: "flex", justifyContent: "flex-start", width: "100%" }}>
               <Tooltip title={disabled ? "Cannot delete this module" : "Delete entire module"}>
                 <Button
                   type="primary"
@@ -1919,7 +1882,7 @@ const TimeBuilder = () => {
   };
 
   const isNextStepAllowed = () => {
-    if (currentStep == 5) {
+    if (currentStep == 6) {
       return sequencedModules.every((module: any) =>
         module.activities.every((activity: any) => {
           if (!hasPrerequisites(activity)) {
@@ -2400,17 +2363,14 @@ const TimeBuilder = () => {
     if (!module || !selectedProject || !selectedProjectId) return;
 
     const moduleCode = module.parentModuleCode;
-
-    const updatedSequenced = sequencedModules.filter(
+    const removedCodes = (module.activities || []).map((activity: any) => activity.code);
+    const filteredSequenced = sequencedModules.filter(
       (m: any) => m.parentModuleCode !== moduleCode
     );
-
-    const updatedFinal = finalData.filter(
-      (m: any) => m.parentModuleCode !== moduleCode
+    const updatedSequenced = recalculateTimeline(
+      removePrerequisiteReferences(filteredSequenced, removedCodes)
     );
-
-    setSequencedModules(updatedSequenced);
-    setFinalData(updatedFinal);
+    commitTimelineState(updatedSequenced);
 
     setSelectedActivities(prev =>
       prev.filter(
@@ -2423,10 +2383,11 @@ const TimeBuilder = () => {
       const newItems = selectedProject.initialStatus.items.filter(
         (m: any) => m.parentModuleCode !== moduleCode
       );
+      const sanitizedItems = removePrerequisiteReferences(newItems, removedCodes);
 
       updatedInitialStatus = {
         ...selectedProject.initialStatus,
-        items: newItems,
+        items: sanitizedItems,
       };
     }
 
@@ -2459,7 +2420,7 @@ const TimeBuilder = () => {
     const activityCode = activity.code;
     const parentModuleCode = module.parentModuleCode;
 
-    const updatedSequenced = sequencedModules
+    const filteredSequenced = sequencedModules
       .map((m: any) =>
         m.parentModuleCode === parentModuleCode
           ? {
@@ -2471,22 +2432,10 @@ const TimeBuilder = () => {
           : m
       )
       .filter((m: any) => (m.activities || []).length > 0);
-
-    const updatedFinal = finalData
-      .map((m: any) =>
-        m.parentModuleCode === parentModuleCode
-          ? {
-            ...m,
-            activities: (m.activities || []).filter(
-              (a: any) => a.code !== activityCode
-            ),
-          }
-          : m
-      )
-      .filter((m: any) => (m.activities || []).length > 0);
-
-    setSequencedModules(updatedSequenced);
-    setFinalData(updatedFinal);
+    const updatedSequenced = recalculateTimeline(
+      removePrerequisiteReferences(filteredSequenced, [activityCode])
+    );
+    commitTimelineState(updatedSequenced);
 
     setSelectedActivities(prev =>
       prev.filter(code => code !== activityCode)
@@ -2507,10 +2456,11 @@ const TimeBuilder = () => {
             : m
         )
         .filter((m: any) => (m.activities || []).length > 0);
+      const sanitizedItems = removePrerequisiteReferences(newItems, [activityCode]);
 
       updatedInitialStatus = {
         ...selectedProject.initialStatus,
-        items: newItems,
+        items: sanitizedItems,
       };
     }
 
@@ -2644,17 +2594,15 @@ const TimeBuilder = () => {
           ? { ...m, activities: [...(m.activities || []), newActivity] }
           : m
       );
-
-      setSequencedModules(updatedSequenced);
-      setFinalData(updatedSequenced);
-      setModules(updatedSequenced);
+      const recalculated = recalculateTimeline(updatedSequenced);
+      commitTimelineState(recalculated);
 
       setActivitiesData(
-        updatedSequenced.flatMap((m: any) => m.activities || [])
+        recalculated.flatMap((m: any) => m.activities || [])
       );
 
       setSelectedActivities(
-        updatedSequenced.flatMap((m: any) =>
+        recalculated.flatMap((m: any) =>
           (m.activities || []).map((a: any) => a.code)
         )
       );
@@ -2680,13 +2628,13 @@ const TimeBuilder = () => {
       const updatedProject = {
         ...selectedProject,
         initialStatus: updatedInitialStatus,
-        processedTimelineData: updatedSequenced,
+        processedTimelineData: recalculated,
       };
 
       setSelectedProject(updatedProject);
 
       if (isUpdateMode && selectedTimelineId) {
-        await db.updateProjectTimeline(selectedTimelineId, updatedSequenced);
+        await db.updateProjectTimeline(selectedTimelineId, recalculated);
       }
 
       await db.updateProject(selectedProjectId, updatedProject);
@@ -2802,8 +2750,8 @@ const TimeBuilder = () => {
                   <Step title="Activities & Duration" />
                   <Step title="Prerequisites" />
                   <Step title="Slack" />
-                  <Step title="Start Date" />
                   <Step title="Holiday" />
+                  <Step title="Start Date" />
                   <Step title="Project Timeline" />
                 </Steps>
               </div>
@@ -2870,7 +2818,7 @@ const TimeBuilder = () => {
                         )}
                       </Droppable>
                     </DragDropContext>
-                  ) : currentStep == 6 ? (
+                  ) : currentStep == 5 ? (
                     <div>
                       <div className="holiday-actions">
                         <div className="st-sun-field">
@@ -2970,6 +2918,7 @@ const TimeBuilder = () => {
                         dataSource={sequencedModules}
                         pagination={false}
                         sticky={{ offsetHeader: 0 }}
+                        showHeader={currentStep <= 3}
                         rowClassName={(record) => (record.activities ? "module-heading" : "")}
                         expandedRowKeys={expandedRowKeys}
                         onExpand={(expanded, record) => {
@@ -2999,10 +2948,10 @@ const TimeBuilder = () => {
                                 columns={getColumnsForStep(currentStep)}
                                 dataSource={module.activities}
                                 pagination={false}
-                                showHeader={false}
+                                showHeader={currentStep > 3}
                                 bordered
                                 sticky
-                                className="tb-hide-x"
+                                className={`tb-hide-x ${currentStep > 3 ? "tb-inner-activity-table" : ""}`}
                               />
                             </div>
                           ),
