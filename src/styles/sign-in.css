@@ -2,7 +2,9 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 2rem;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+  min-height: 100dvh;
+  box-sizing: border-box;
   font-family: var(--font-base);
   background: var(--bg-main);
   color: var(--text-primary);
@@ -27,16 +29,16 @@
 }
 
 .signup-container .signin-adjust {
-  height: calc(100vh - 200px);
+  height: auto;
 }
 
 .signup-container .signup-adjust {
-  height: calc(100vh - 100px);
+  height: auto;
 }
 
 .signup-container .signup-left {
   background: linear-gradient(135deg, rgba(31, 122, 99, .10), rgba(52, 211, 153, .12));
-  padding: 3rem;
+  padding: clamp(1.5rem, 3vw, 3rem);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -44,21 +46,6 @@
   border: 1px solid rgba(0, 0, 0, .06);
   border-top-right-radius: 0;
     border-bottom-right-radius: 0;
-}
-
-.signup-container .vector-image {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1rem 0;
-  max-height: 240px;
-}
-
-.signup-container .vector-image img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  display: block;
 }
 
 .signup-container .promo-text {
@@ -106,7 +93,7 @@
 
 .signup-container .signup-right {
   background: var(--bg-surface);
-  padding: 2rem;
+  padding: clamp(1.5rem, 2.5vw, 2rem);
   display: flex;
   align-items: flex-start;
   justify-content: center;

@@ -320,10 +320,6 @@ const SignInSignUp: React.FC = () => {
             </Modal>
 
             <div className={isSignUp ? "signup-left signup-adjust" : "signup-left signin-adjust"}>
-                <div className="vector-image">
-                    <img src="/images/auths/signin.png" alt="Mining Management Illustration" />
-                </div>
-
                 <div className="promo-text">
                     <h1>Mining Simplified, Productivity Amplified</h1>
                     <p>

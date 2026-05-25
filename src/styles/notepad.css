@@ -53,6 +53,17 @@
     transition: all 0.2s ease;
 }
 
+.notepad-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    flex-shrink: 0;
+}
+
 .notepad-primary-btn {
     background: var(--color-primary);
     color: var(--text-inverse);
@@ -244,6 +255,16 @@
     transition: all 0.2s ease;
 }
 
+.notepad-badge-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
 .notepad-action-btn:hover:not(:disabled),
 .notepad-table-btn:hover,
 .notepad-emoji-btn:hover {
@@ -266,13 +287,14 @@
 
 .notepad-emoji-wrap {
     position: relative;
+    z-index: 12;
 }
 
 .notepad-emoji-panel {
     position: absolute;
     top: calc(100% + 10px);
     right: 0;
-    z-index: 5;
+    z-index: 20;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
@@ -282,12 +304,16 @@
     border: 1px solid var(--border);
     border-radius: 16px;
     box-shadow: var(--shadow-md);
+    animation: notepad-emoji-pop 0.16s ease;
 }
 
 .notepad-emoji-btn {
     font-size: 20px;
     line-height: 1;
     padding: 10px 0;
+    min-width: auto;
+    width: 100%;
+    border-radius: 12px;
 }
 
 .notepad-table-actions {
@@ -299,11 +325,23 @@
     background: rgba(31, 122, 99, 0.04);
 }
 
+@keyframes notepad-emoji-pop {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
 .notepad-editor-wrap {
     position: relative;
     flex: 1;
     min-height: 0;
     overflow: auto;
+    padding: 0;
 }
 
 .notepad-editor {
@@ -416,10 +454,17 @@
 
 .notepad-placeholder {
     position: absolute;
-    top: 28px;
-    left: 24px;
-    color: #9ca3af;
+    top: 34px;
+    left: 28px;
+    right: 28px;
+    display: flex;
+    align-items: flex-start;
+    color: #94a3b8;
+    font-size: 17px;
+    line-height: 1.8;
+    letter-spacing: 0.01em;
     pointer-events: none;
+    opacity: 0.88;
 }
 
 [data-theme="dark"] .notepad-page {

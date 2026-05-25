@@ -131,11 +131,6 @@ const asNum = (v: any) => {
     return Number.isFinite(n) ? n : 0;
 };
 
-const formatCompactNumber = (value: number) =>
-    Number(value || 0).toLocaleString(undefined, {
-        maximumFractionDigits: Math.abs(value) >= 100 ? 0 : 1,
-    });
-
 const addDays = (d: Date, days: number) => new Date(d.getTime() + days * dayMs);
 
 const toInputDate = (d: Date) => {
@@ -1290,55 +1285,6 @@ const Charts = (props: any) => {
         ];
     }, [topStats]);
 
-    const projectEnd = useMemo(() => addDays(projectStart, Math.max(totalDays - 1, 0)), [projectStart, totalDays]);
-
-    const heroHighlights = useMemo(
-        () => [
-            {
-                label: "Tracked modules",
-                value: `${modules.length}`,
-                note: "with timeline activity",
-            },
-            {
-                label: "Schedule window",
-                value: `${fmt(projectStart)} - ${fmt(projectEnd)}`,
-                note: `${totalDays} monitored day(s)`,
-            },
-            {
-                label: "Top risk pocket",
-                value: topStats.topDelayBucket,
-                note: `${topStats.totalDelayedActivities} delayed activity(s)`,
-            },
-            {
-                label: "Cost posture",
-                value: !topStats.cost.hasAny ? "Awaiting cost feed" : topStats.cost.variancePct > 0 ? "Over budget trend" : "Within plan",
-                note: !topStats.cost.hasAny ? "Forecast unavailable" : `${formatCompactNumber(topStats.cost.forecast)} forecast vs ${formatCompactNumber(topStats.cost.budgeted)} budget`,
-            },
-        ],
-        [modules.length, projectStart, projectEnd, totalDays, topStats]
-    );
-
-    const commandDeck = useMemo(
-        () => [
-            {
-                label: "Active workstreams",
-                value: `${health.totals.totalActive}`,
-                note: `${health.totals.pctOnTrack}% on track right now`,
-            },
-            {
-                label: "Critical attention",
-                value: `${health.totals.delayedBeyondSlack}`,
-                note: "activities beyond available slack",
-            },
-            {
-                label: "Cost watchpoint",
-                value: costView.totals.firstOverrunDate || "No overrun",
-                note: costView.totals.firstOverrunDate ? "first date actual + delay crossed budget" : "budget line still holding",
-            },
-        ],
-        [health.totals, costView.totals.firstOverrunDate]
-    );
-
     const updateMetricsScrollState = useCallback(() => {
         const el = metricsRailRef.current;
         if (!el) {
@@ -1411,46 +1357,6 @@ const Charts = (props: any) => {
 
     return (
         <div className="chartsPage">
-            <section className="dashboardHero">
-                <div className="heroBackdrop heroBackdropOne" />
-                <div className="heroBackdrop heroBackdropTwo" />
-                <div className="dashboardHeroMain">
-                    <div className="heroCopy">
-                        <div className="heroEyebrow">AML Monitoring Dashboard</div>
-                        <h1 className="heroTitle">Sharper execution visibility across schedule, risk, and cost.</h1>
-                        <p className="heroDescription">
-                            Monitor timeline performance, spot root-cause pressure early, and keep cost drift visible from one decision-ready command center.
-                        </p>
-
-                        <div className="heroHighlightsGrid">
-                            {heroHighlights.map((item) => (
-                                <div className="heroHighlightCard" key={item.label}>
-                                    <div className="heroHighlightLabel">{item.label}</div>
-                                    <div className="heroHighlightValue">{item.value}</div>
-                                    <div className="heroHighlightNote">{item.note}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="heroCommandDeck">
-                        <div className="heroCommandTitle">Operations pulse</div>
-                        <div className="heroCommandSub">A fast view of the portfolio areas demanding attention now.</div>
-                        <div className="heroCommandList">
-                            {commandDeck.map((item) => (
-                                <div className="heroCommandItem" key={item.label}>
-                                    <div className="heroCommandValue">{item.value}</div>
-                                    <div className="heroCommandContent">
-                                        <div className="heroCommandLabel">{item.label}</div>
-                                        <div className="heroCommandNote">{item.note}</div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             <div className="topStatsWrap">
                 {canScrollMetricsLeft ? (
                     <button className="metricsArrow metricsArrowLeft" onClick={() => scrollMetrics("left")} aria-label="Scroll metrics left">

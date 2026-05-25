@@ -17,14 +17,51 @@ import { useDropzone } from "react-dropzone";
 import "../styles/documents.css"
 import MapComponent from "./MapComponent.tsx";
 import ImageContainer from "../Components/ImageContainer";
+import { defaultCsrContentConfig, normalizeCsrContentConfig, type CsrRegisterItem } from "../config/csrContent";
 import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { useNavigate, useParams } from "react-router-dom";
 import dayjs from "dayjs";
+
+const MOC_MILESTONE_CONFIG = [
+  "Exploration",
+  "GR Submission",
+  "Vetting of GR",
+  "Mine Plan Approval",
+  "TOR",
+  "EC",
+  "FC Stage - I",
+  "FC Stage - II",
+  "Land Acquisition",
+  "Mining Lease",
+  "CTE",
+  "CTO",
+  "Mine Opening Permission",
+] as const;
+
+type MocMilestoneName = typeof MOC_MILESTONE_CONFIG[number];
+
+type MocMilestone = {
+  name: MocMilestoneName;
+  initialCompletionStatus: "Yes" | "No";
+  timelineMonths: string;
+  targetDate: string | null;
+  pbgDeduction: string;
+};
+
+const createDefaultMocMilestones = (): MocMilestone[] =>
+  MOC_MILESTONE_CONFIG.map((name) => ({
+    name,
+    initialCompletionStatus: "No",
+    timelineMonths: "",
+    targetDate: null,
+    pbgDeduction: "",
+  }));
+
 export const RegisterNewProject: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [formData, setFormData] = useState<{ [key: string]: string }>({});
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [mineTypeOptions, setMineTypeOptions] = useState<string[]>([]);
   const [allLibrariesName, setAllLibrariesName] = useState<any>([]);
@@ -72,6 +109,7 @@ export const RegisterNewProject: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [csrRegisterItems, setCsrRegisterItems] = useState<CsrRegisterItem[]>(defaultCsrContentConfig.registerProjectItems);
   const numericSuffixByKey: Record<string, string> = {
     reserve: "MT",
     netGeologicalReserve: "MT",
@@ -144,12 +182,21 @@ export const RegisterNewProject: React.FC = () => {
   const loadProjectData = async (projectId: string) => {
     const project = await db.getProjectById(projectId);
     if (project) {
+      const normalizedMocEfficiencyParameters = {
+        ...(project.mocEfficiencyParameters || {}),
+        mocMilestones: recalculateMocMilestones(
+          Array.isArray(project?.mocEfficiencyParameters?.mocMilestones)
+            ? project.mocEfficiencyParameters.mocMilestones
+            : createDefaultMocMilestones(),
+          project?.contractualDetails?.vestingOrderDate
+        ),
+      };
       const stepsData = [
         project.projectParameters || {},
         project.locations || {},
         project.contractualDetails || {},
         project.financialParameters || {},
-        project.mocEfficiencyParameters || {},
+        normalizedMocEfficiencyParameters,
       ];
 
       setFormStepsData(stepsData);
@@ -165,6 +212,11 @@ export const RegisterNewProject: React.FC = () => {
     const init = async () => {
       const user = await getCurrentUser();
       setCurrentUser(user);
+      if (user?.orgId) {
+        const company = await db.getCompanyByGuiId(String(user.orgId));
+        const csrConfig = normalizeCsrContentConfig(company?.csrContentConfig);
+        setCsrRegisterItems(csrConfig.registerProjectItems);
+      }
 
       const storedOptions: any = (await db.getAllMineTypes())?.filter(
         (type: any) => type.orgId === user.orgId
@@ -231,8 +283,91 @@ export const RegisterNewProject: React.FC = () => {
     }
   };
 
+  const recalculateMocMilestones = (milestones: MocMilestone[], vestingOrderDate?: any) => {
+    const baseDate = toDayjs(vestingOrderDate);
+    let cumulativeMonths = 0;
+
+    return milestones.map((milestone) => {
+      const isEnabled = milestone.initialCompletionStatus === "Yes";
+      const parsedMonths = Number(milestone.timelineMonths);
+      const monthValue = Number.isFinite(parsedMonths) && parsedMonths > 0 ? parsedMonths : 0;
+
+      if (isEnabled) {
+        cumulativeMonths += monthValue;
+      }
+
+      return {
+        ...milestone,
+        targetDate:
+          isEnabled && baseDate && monthValue > 0
+            ? baseDate.add(cumulativeMonths, "month").toISOString()
+            : null,
+      };
+    });
+  };
+
+  const getEffectiveVestingOrderDate = (source?: Record<string, any>) =>
+    source?.vestingOrderDate ?? formStepsData?.[2]?.vestingOrderDate ?? null;
+
   const handleChange = (name: string, value: any) => {
-    setFormData({ ...formData, [name]: value });
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "vestingOrderDate") {
+        return {
+          ...next,
+          mocMilestones: recalculateMocMilestones(
+            Array.isArray(prev.mocMilestones) ? prev.mocMilestones : createDefaultMocMilestones(),
+            value
+          ),
+        };
+      }
+      return next;
+    });
+  };
+
+  const handleMocMilestoneChange = (
+    index: number,
+    field: keyof Omit<MocMilestone, "name" | "targetDate">,
+    value: string
+  ) => {
+    setFormData((prev) => {
+      const currentMilestones = Array.isArray(prev.mocMilestones) ? prev.mocMilestones : createDefaultMocMilestones();
+      const updatedMilestones = currentMilestones.map((milestone, currentIndex) => {
+        if (currentIndex !== index) return milestone;
+
+        if (field === "initialCompletionStatus") {
+          const enabled = value === "Yes";
+          return {
+            ...milestone,
+            initialCompletionStatus: enabled ? "Yes" : "No",
+            timelineMonths: enabled ? milestone.timelineMonths : "",
+            pbgDeduction: enabled ? milestone.pbgDeduction : "",
+            targetDate: enabled ? milestone.targetDate : null,
+          };
+        }
+
+        if (field === "pbgDeduction") {
+          const numericValue = Number(value);
+          if (value === "") {
+            return { ...milestone, pbgDeduction: "" };
+          }
+          if (!Number.isFinite(numericValue)) {
+            return milestone;
+          }
+          return {
+            ...milestone,
+            pbgDeduction: String(Math.min(100, Math.max(0, numericValue))),
+          };
+        }
+
+        return { ...milestone, [field]: value };
+      });
+
+      return {
+        ...prev,
+        mocMilestones: recalculateMocMilestones(updatedMilestones, getEffectiveVestingOrderDate(prev)),
+      };
+    });
   };
 
   const showConfirmationModal = () => {
@@ -247,13 +382,21 @@ export const RegisterNewProject: React.FC = () => {
     const loggedInUser = getCurrentUser();
     const finalData = Array.isArray(formStepsData) ? [...formStepsData] : [];
     finalData[currentStep - 1] = { ...formData };
+    const contractualDetails = finalData[2] || {};
+    const mocEfficiencyParameters = {
+      ...(finalData[4] || {}),
+      mocMilestones: recalculateMocMilestones(
+        Array.isArray(finalData?.[4]?.mocMilestones) ? finalData[4].mocMilestones : createDefaultMocMilestones(),
+        contractualDetails.vestingOrderDate
+      ),
+    };
 
     const projectPayload = {
       projectParameters: finalData[0] || {},
       locations: finalData[1] || {},
-      contractualDetails: finalData[2] || {},
+      contractualDetails,
       financialParameters: finalData[3] || {},
-      mocEfficiencyParameters: finalData[4] || {},
+      mocEfficiencyParameters,
       initialStatus: { library: "", items: [] },
       documents: contractualDocuments,
       userGuiId: loggedInUser?.guiId,
@@ -290,17 +433,35 @@ export const RegisterNewProject: React.FC = () => {
     }
   };
 
-  const validateFields = (_step: number): boolean => {
-    // let newErrors: { [key: string]: string } = {};
-    // requiredFields[step].forEach((field) => {
-    //   const fieldValue = formData[field];
-    //   if (fieldValue === undefined || fieldValue === null || (typeof fieldValue === 'string' && fieldValue.trim() === "") || (typeof fieldValue === 'number' && isNaN(fieldValue))) {
-    //     newErrors[field] = "This field is required.";
-    //   }
-    // });
-    // setErrors(newErrors);
-    // return Object.keys(newErrors).length === 0;
-    return true;
+  const validateFields = (step: number): boolean => {
+    const newErrors: { [key: string]: string } = {};
+
+    if (step === 1 && !formData.typeOfMine) {
+      newErrors.typeOfMine = "Type of Mine is required";
+    }
+
+    if (step === 3 && !formData.vestingOrderDate) {
+      newErrors.vestingOrderDate = "Vesting Order Date is required";
+    }
+
+    if (step === 5) {
+      const milestones = Array.isArray(formData.mocMilestones) ? formData.mocMilestones : [];
+      milestones.forEach((milestone: MocMilestone, index: number) => {
+        if (milestone.initialCompletionStatus !== "Yes") return;
+
+        if (!milestone.timelineMonths) {
+          newErrors[`mocTimelineMonths-${index}`] = "Timeline is required";
+        }
+
+        const pbgDeduction = Number(milestone.pbgDeduction);
+        if (milestone.pbgDeduction !== "" && (!Number.isFinite(pbgDeduction) || pbgDeduction < 0 || pbgDeduction > 100)) {
+          newErrors[`mocPbgDeduction-${index}`] = "PBG Deduction must be between 0 and 100";
+        }
+      });
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   useEffect(() => {
@@ -377,6 +538,7 @@ export const RegisterNewProject: React.FC = () => {
       energyUseBenchmark: "",
       measurementFrequency: "",
       mocRemarks: "",
+      mocMilestones: createDefaultMocMilestones(),
       ...(Array.isArray(allLibrariesName) ? allLibrariesName : []).reduce(
         (acc: any, moduleName: any) => {
           if (typeof moduleName === "string") {
@@ -1002,115 +1164,101 @@ export const RegisterNewProject: React.FC = () => {
 
       case 5:
         return (
-          <Form style={{ marginTop: "15px" }} layout="horizontal">
-            <Row gutter={[16, 16]}>
-              {[
-                {
-                  label: (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      Target overall MOC efficiency
-                      <Tooltip title="Target overall Management of Change / operational efficiency">
-                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
-                      </Tooltip>
-                    </span>
-                  ),
-                  labelText: "Target overall MOC efficiency",
-                  key: "targetOverallMocEfficiency",
-                  placeholder: "Enter target efficiency",
-                },
-                {
-                  label: "Baseline MOC efficiency",
-                  labelText: "Baseline MOC efficiency",
-                  key: "baselineMocEfficiency",
-                  placeholder: "Enter baseline efficiency",
-                },
-                {
-                  label: "Planned annual improvement",
-                  labelText: "Planned annual improvement",
-                  key: "plannedAnnualImprovement",
-                  placeholder: "Enter planned improvement",
-                },
-                {
-                  label: "Target equipment availability",
-                  labelText: "Target equipment availability",
-                  key: "equipmentAvailabilityTarget",
-                  placeholder: "Enter target availability",
-                },
-                {
-                  label: (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      Energy use benchmark
-                      <Tooltip title="Benchmark energy intensity">
-                        <InfoCircleOutlined style={{ color: "#8c8c8c" }} />
-                      </Tooltip>
-                    </span>
-                  ),
-                  labelText: "Energy use benchmark",
-                  key: "energyUseBenchmark",
-                  placeholder: "Enter benchmark value",
-                },
-              ].map(({ label, labelText, key, placeholder }) => (
-                <Col span={24} key={key}>
+          <div className="moc-efficiency-table-wrap">
+            <Form style={{ marginTop: "15px" }} layout="horizontal">
+              <Row gutter={[16, 16]}>
+                <Col span={24}>
                   <Form.Item
                     colon={false}
-                    label={label}
+                    label="Vesting Order Date"
                     labelAlign="left"
                     labelCol={{ span: 6 }}
                     wrapperCol={{ span: 18 }}
-                    validateStatus={errors[key] ? "error" : ""}
-                    help={errors[key] ? `${labelText} is required` : ""}
                   >
-                    <Input
-                      type="number"
-                      value={formData[key] || ""}
-                      placeholder={placeholder}
-                      suffix={renderUnitSuffix(key)}
-                      onChange={(e) => handleChange(key, e.target.value)}
+                    <DatePicker
+                      style={{ width: "100%" }}
+                      value={toDayjs(getEffectiveVestingOrderDate(formData))}
+                      format="DD-MM-YYYY"
+                      disabled
+                      placeholder="Vesting order date"
                     />
                   </Form.Item>
                 </Col>
-              ))}
-              <Col span={24}>
-                <Form.Item
-                  colon={false}
-                  label="Measurement frequency"
-                  labelAlign="left"
-                  labelCol={{ span: 6 }}
-                  wrapperCol={{ span: 18 }}
-                >
-                  <Select
-                    allowClear
-                    placeholder="Select frequency"
-                    value={formData.measurementFrequency || undefined}
-                    onChange={(value) => handleChange("measurementFrequency", value || "")}
-                    style={{ width: "100%" }}
-                  >
-                    {["Monthly", "Quarterly", "Half-yearly", "Annual"].map((opt) => (
-                      <Select.Option key={opt} value={opt}>
-                        {opt}
-                      </Select.Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-              <Col span={24}>
-                <Form.Item
-                  colon={false}
-                  label="Remarks / notes"
-                  labelAlign="left"
-                  labelCol={{ span: 6 }}
-                  wrapperCol={{ span: 18 }}
-                >
-                  <Input.TextArea
-                    rows={3}
-                    value={formData.mocRemarks || ""}
-                    placeholder="Optional notes on MOC efficiency targets or methodology"
-                    onChange={(e) => handleChange("mocRemarks", e.target.value)}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
+              </Row>
+            </Form>
+            <div className="moc-efficiency-table">
+              <div className="moc-efficiency-table-head">
+                <div>Milestone</div>
+                <div>Initial Completion Status</div>
+                <div>MOC Timeline (in months)</div>
+                <div>MOC Target Date</div>
+                <div>PBG Deduction %</div>
+              </div>
+              {(Array.isArray(formData.mocMilestones) ? formData.mocMilestones : createDefaultMocMilestones()).map(
+                (milestone: MocMilestone, index: number) => {
+                  const isEnabled = milestone.initialCompletionStatus === "Yes";
+                  return (
+                    <div className="moc-efficiency-table-row" key={milestone.name}>
+                      <div className="moc-milestone-name">{milestone.name}</div>
+                      <div>
+                        <Select
+                          value={milestone.initialCompletionStatus}
+                          style={{ width: "100%" }}
+                          onChange={(value) => handleMocMilestoneChange(index, "initialCompletionStatus", value)}
+                        >
+                          <Select.Option value="No">No</Select.Option>
+                          <Select.Option value="Yes">Yes</Select.Option>
+                        </Select>
+                      </div>
+                      <div>
+                        <Form.Item
+                          style={{ marginBottom: 0 }}
+                          validateStatus={errors[`mocTimelineMonths-${index}`] ? "error" : ""}
+                          help={errors[`mocTimelineMonths-${index}`] || ""}
+                        >
+                          <Input
+                            type="number"
+                            min={0}
+                            value={milestone.timelineMonths}
+                            placeholder="Enter months"
+                            disabled={!isEnabled}
+                            onChange={(e) => handleMocMilestoneChange(index, "timelineMonths", e.target.value)}
+                          />
+                        </Form.Item>
+                      </div>
+                      <div>
+                        <DatePicker
+                          style={{ width: "100%" }}
+                          format="DD-MM-YYYY"
+                          value={toDayjs(milestone.targetDate)}
+                          disabled
+                          placeholder=""
+                        />
+                      </div>
+                      <div>
+                        <Form.Item
+                          style={{ marginBottom: 0 }}
+                          validateStatus={errors[`mocPbgDeduction-${index}`] ? "error" : ""}
+                          help={errors[`mocPbgDeduction-${index}`] || ""}
+                        >
+                          <Input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={milestone.pbgDeduction}
+                            placeholder="Enter deduction %"
+                            disabled={!isEnabled}
+                            suffix="%"
+                            onChange={(e) => handleMocMilestoneChange(index, "pbgDeduction", e.target.value)}
+                          />
+                        </Form.Item>
+                      </div>
+                    </div>
+                  );
+                }
+              )}
+            </div>
+          </div>
         );
 
       default:
@@ -1327,25 +1475,18 @@ export const RegisterNewProject: React.FC = () => {
     };
 
     const mocEfficiencyParameters = {
-      targetOverallMocEfficiency: String(
-        raw?.mocEfficiencyParameters?.targetOverallMocEfficiency ?? raw?.targetOverallMocEfficiency ?? ""
+      mocMilestones: recalculateMocMilestones(
+        Array.isArray(raw?.mocEfficiencyParameters?.mocMilestones)
+          ? raw.mocEfficiencyParameters.mocMilestones.map((milestone: any, index: number) => ({
+              name: MOC_MILESTONE_CONFIG[index] ?? milestone?.name,
+              initialCompletionStatus: milestone?.initialCompletionStatus === "Yes" ? "Yes" : "No",
+              timelineMonths: String(milestone?.timelineMonths ?? ""),
+              targetDate: toIsoDate(milestone?.targetDate),
+              pbgDeduction: String(milestone?.pbgDeduction ?? ""),
+            }))
+          : createDefaultMocMilestones(),
+        raw?.contractualDetails?.vestingOrderDate ?? raw?.vestingOrderDate
       ),
-      baselineMocEfficiency: String(
-        raw?.mocEfficiencyParameters?.baselineMocEfficiency ?? raw?.baselineMocEfficiency ?? ""
-      ),
-      plannedAnnualImprovement: String(
-        raw?.mocEfficiencyParameters?.plannedAnnualImprovement ?? raw?.plannedAnnualImprovement ?? ""
-      ),
-      equipmentAvailabilityTarget: String(
-        raw?.mocEfficiencyParameters?.equipmentAvailabilityTarget ?? raw?.equipmentAvailabilityTarget ?? ""
-      ),
-      energyUseBenchmark: String(
-        raw?.mocEfficiencyParameters?.energyUseBenchmark ?? raw?.energyUseBenchmark ?? ""
-      ),
-      measurementFrequency: String(
-        raw?.mocEfficiencyParameters?.measurementFrequency ?? raw?.measurementFrequency ?? ""
-      ),
-      mocRemarks: String(raw?.mocEfficiencyParameters?.mocRemarks ?? raw?.mocRemarks ?? ""),
     };
 
     return {
@@ -1620,7 +1761,10 @@ export const RegisterNewProject: React.FC = () => {
             </div>
           ) : (
             <div className="image-container">
-              <ImageContainer imageUrl={["/images/auths/m5.jpg", "/images/auths/m5.jpg", "/images/auths/m5.jpg"]} />
+              <ImageContainer
+                imageUrl={csrRegisterItems.map((item) => item.image)}
+                items={csrRegisterItems}
+              />
             </div>
           )}
         </div>

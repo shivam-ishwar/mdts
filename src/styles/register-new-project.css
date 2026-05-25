@@ -169,6 +169,78 @@
     padding-left: 18px;
 }
 
+.moc-efficiency-table-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.moc-efficiency-table {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.moc-efficiency-table-head,
+.moc-efficiency-table-row {
+    display: grid;
+    grid-template-columns: 1.8fr 1.15fr 1.15fr 1.15fr 0.95fr;
+    gap: 10px;
+    align-items: start;
+    padding: 10px 12px;
+}
+
+.moc-efficiency-table-head {
+    background: var(--bg-muted);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.moc-efficiency-table-row {
+    border-top: 1px solid var(--border);
+}
+
+.moc-milestone-name {
+    font-weight: 600;
+    font-size: 13px;
+    padding-top: 7px;
+    line-height: 1.35;
+}
+
+.moc-efficiency-table :is(.ant-input, .ant-select-selector, .ant-picker) {
+    font-size: 13px;
+    min-height: 32px;
+}
+
+.moc-efficiency-table .ant-select-single {
+    height: 32px;
+}
+
+.moc-efficiency-table .ant-select-single .ant-select-selector {
+    height: 32px !important;
+    align-items: center;
+    padding: 0 11px !important;
+}
+
+.moc-efficiency-table .ant-select-single .ant-select-selection-item,
+.moc-efficiency-table .ant-select-single .ant-select-selection-placeholder {
+    line-height: 30px !important;
+}
+
+.moc-efficiency-table .ant-input {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.moc-efficiency-table .ant-picker {
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.moc-efficiency-table .ant-form-item-explain-error {
+    font-size: 12px;
+}
+
 @media (max-width: 1100px) {
     .registration-container {
         grid-template-columns: 1fr;
@@ -179,5 +251,10 @@
     .maips-data {
         min-height: auto;
         height: auto;
+    }
+
+    .moc-efficiency-table-head,
+    .moc-efficiency-table-row {
+        grid-template-columns: 1fr;
     }
 }

@@ -2,6 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { Tooltip } from "antd";
+import {
+    BoldOutlined,
+    CloseOutlined,
+    CodeOutlined,
+    DeleteOutlined,
+    FileAddOutlined,
+    ItalicOutlined,
+    MessageOutlined,
+    OrderedListOutlined,
+    SmileOutlined,
+    TableOutlined,
+    UnorderedListOutlined,
+} from "@ant-design/icons";
 import "../styles/notepad.css";
 
 type NoteRecord = {
@@ -74,6 +88,7 @@ const Notepad = () => {
     const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
     const [showEmojis, setShowEmojis] = useState(false);
     const activeNoteIdRef = useRef<string | null>(null);
+    const emojiWrapRef = useRef<HTMLDivElement | null>(null);
 
     const activeNote = useMemo(
         () => notes.find((note) => note.id === activeNoteId) ?? null,
@@ -135,6 +150,22 @@ const Notepad = () => {
         setShowEmojis(false);
     }, [activeNote, editor]);
 
+    useEffect(() => {
+        if (!showEmojis) return;
+
+        const handleOutsideClick = (event: MouseEvent) => {
+            const target = event.target as Node | null;
+            if (emojiWrapRef.current && target && !emojiWrapRef.current.contains(target)) {
+                setShowEmojis(false);
+            }
+        };
+
+        document.addEventListener("mousedown", handleOutsideClick);
+        return () => {
+            document.removeEventListener("mousedown", handleOutsideClick);
+        };
+    }, [showEmojis]);
+
     const sortedNotes = useMemo(
         () => [...notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
         [notes]
@@ -176,55 +207,55 @@ const Notepad = () => {
 
     const toolbarButtons = [
         {
-            label: "B",
+            icon: <BoldOutlined />,
             title: "Bold",
             isActive: editor?.isActive("bold"),
             onClick: () => editor?.chain().focus().toggleBold().run(),
         },
         {
-            label: "I",
+            icon: <ItalicOutlined />,
             title: "Italic",
             isActive: editor?.isActive("italic"),
             onClick: () => editor?.chain().focus().toggleItalic().run(),
         },
         {
-            label: "H1",
+            icon: <span className="notepad-badge-icon">H1</span>,
             title: "Heading",
             isActive: editor?.isActive("heading", { level: 1 }),
             onClick: () => editor?.chain().focus().toggleHeading({ level: 1 }).run(),
         },
         {
-            label: "H2",
+            icon: <span className="notepad-badge-icon">H2</span>,
             title: "Subheading",
             isActive: editor?.isActive("heading", { level: 2 }),
             onClick: () => editor?.chain().focus().toggleHeading({ level: 2 }).run(),
         },
         {
-            label: "• List",
+            icon: <UnorderedListOutlined />,
             title: "Bullet List",
             isActive: editor?.isActive("bulletList"),
             onClick: () => editor?.chain().focus().toggleBulletList().run(),
         },
         {
-            label: "1. List",
+            icon: <OrderedListOutlined />,
             title: "Numbered List",
             isActive: editor?.isActive("orderedList"),
             onClick: () => editor?.chain().focus().toggleOrderedList().run(),
         },
         {
-            label: "\" Quote",
+            icon: <MessageOutlined />,
             title: "Quote",
             isActive: editor?.isActive("blockquote"),
             onClick: () => editor?.chain().focus().toggleBlockquote().run(),
         },
         {
-            label: "Code",
+            icon: <CodeOutlined />,
             title: "Code Block",
             isActive: editor?.isActive("codeBlock"),
             onClick: () => editor?.chain().focus().toggleCodeBlock().run(),
         },
         {
-            label: "Table",
+            icon: <TableOutlined />,
             title: "Insert Table",
             isActive: editor?.isActive("table"),
             onClick: () => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
@@ -232,12 +263,12 @@ const Notepad = () => {
     ];
 
     const tableButtons = [
-        { label: "+ Row", title: "Add Row Below", onClick: () => editor?.chain().focus().addRowAfter().run() },
-        { label: "+ Col", title: "Add Column After", onClick: () => editor?.chain().focus().addColumnAfter().run() },
-        { label: "- Row", title: "Delete Row", onClick: () => editor?.chain().focus().deleteRow().run() },
-        { label: "- Col", title: "Delete Column", onClick: () => editor?.chain().focus().deleteColumn().run() },
-        { label: "Header", title: "Toggle Header Cell", onClick: () => editor?.chain().focus().toggleHeaderCell().run() },
-        { label: "Del Table", title: "Delete Table", onClick: () => editor?.chain().focus().deleteTable().run() },
+        { icon: <span className="notepad-badge-icon">+R</span>, title: "Add Row Below", onClick: () => editor?.chain().focus().addRowAfter().run() },
+        { icon: <span className="notepad-badge-icon">+C</span>, title: "Add Column After", onClick: () => editor?.chain().focus().addColumnAfter().run() },
+        { icon: <span className="notepad-badge-icon">-R</span>, title: "Delete Row", onClick: () => editor?.chain().focus().deleteRow().run() },
+        { icon: <span className="notepad-badge-icon">-C</span>, title: "Delete Column", onClick: () => editor?.chain().focus().deleteColumn().run() },
+        { icon: <span className="notepad-badge-icon">TH</span>, title: "Toggle Header Cell", onClick: () => editor?.chain().focus().toggleHeaderCell().run() },
+        { icon: <DeleteOutlined />, title: "Delete Table", onClick: () => editor?.chain().focus().deleteTable().run() },
     ];
 
     return (
@@ -248,9 +279,16 @@ const Notepad = () => {
                         <p className="notepad-title">Notes</p>
                         <p className="notepad-subtitle">Create quick notes, revisit them from the list, and open any note into a full editor.</p>
                     </div>
-                    <button type="button" className="notepad-primary-btn" onClick={handleCreateNote}>
-                        Create note
-                    </button>
+                    <Tooltip title="Create note 📝" placement="left">
+                        <button
+                            type="button"
+                            className="notepad-primary-btn notepad-icon-btn"
+                            onClick={handleCreateNote}
+                            aria-label="Create note"
+                        >
+                            <FileAddOutlined />
+                        </button>
+                    </Tooltip>
                 </div>
 
                 <div className="notepad-list-shell">
@@ -291,46 +329,56 @@ const Notepad = () => {
                                 </div>
                             </div>
                             <div className="notepad-toolbar-right">
-                                <button
-                                    type="button"
-                                    className="notepad-ghost-btn"
-                                    onClick={handleCloseEditor}
-                                >
-                                    Close
-                                </button>
-                                <button
-                                    type="button"
-                                    className="notepad-danger-btn"
-                                    onClick={() => handleDeleteNote(activeNote.id)}
-                                >
-                                    Delete
-                                </button>
+                                <Tooltip title="Close note" placement="bottom">
+                                    <button
+                                        type="button"
+                                        className="notepad-ghost-btn notepad-icon-btn"
+                                        onClick={handleCloseEditor}
+                                        aria-label="Close note"
+                                    >
+                                        <CloseOutlined />
+                                    </button>
+                                </Tooltip>
+                                <Tooltip title="Delete note 🗑️" placement="bottom">
+                                    <button
+                                        type="button"
+                                        className="notepad-danger-btn notepad-icon-btn"
+                                        onClick={() => handleDeleteNote(activeNote.id)}
+                                        aria-label="Delete note"
+                                    >
+                                        <DeleteOutlined />
+                                    </button>
+                                </Tooltip>
                             </div>
                         </div>
 
                         <div className="notepad-toolbar-actions">
                             {toolbarButtons.map((button) => (
-                                <button
-                                    key={button.title}
-                                    type="button"
-                                    className={`notepad-action-btn ${button.isActive ? "is-active" : ""}`}
-                                    onClick={button.onClick}
-                                    disabled={!editor}
-                                    title={button.title}
-                                >
-                                    {button.label}
-                                </button>
+                                <Tooltip key={button.title} title={button.title} placement="top">
+                                    <button
+                                        type="button"
+                                        className={`notepad-action-btn notepad-icon-btn ${button.isActive ? "is-active" : ""}`}
+                                        onClick={button.onClick}
+                                        disabled={!editor}
+                                        aria-label={button.title}
+                                    >
+                                        {button.icon}
+                                    </button>
+                                </Tooltip>
                             ))}
-                            <div className="notepad-emoji-wrap">
-                                <button
-                                    type="button"
-                                    className={`notepad-action-btn ${showEmojis ? "is-active" : ""}`}
-                                    onClick={() => setShowEmojis((current) => !current)}
-                                    disabled={!editor}
-                                    title="Insert Emoji"
-                                >
-                                    Emoji
-                                </button>
+                            <div className="notepad-emoji-wrap" ref={emojiWrapRef}>
+                                <Tooltip title="Emoji 😀" placement="top">
+                                    <button
+                                        type="button"
+                                        className={`notepad-action-btn notepad-icon-btn ${showEmojis ? "is-active" : ""}`}
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => setShowEmojis((current) => !current)}
+                                        disabled={!editor}
+                                        aria-label="Insert emoji"
+                                    >
+                                        <SmileOutlined />
+                                    </button>
+                                </Tooltip>
                                 {showEmojis && (
                                     <div className="notepad-emoji-panel">
                                         {EMOJIS.map((emoji) => (
@@ -338,6 +386,7 @@ const Notepad = () => {
                                                 key={emoji}
                                                 type="button"
                                                 className="notepad-emoji-btn"
+                                                onMouseDown={(event) => event.preventDefault()}
                                                 onClick={() => {
                                                     editor?.chain().focus().insertContent(`${emoji} `).run();
                                                     setShowEmojis(false);
@@ -354,14 +403,16 @@ const Notepad = () => {
                         {editor?.isActive("table") && (
                             <div className="notepad-table-actions">
                                 {tableButtons.map((button) => (
-                                    <button
-                                        key={button.title}
-                                        type="button"
-                                        className="notepad-table-btn"
-                                        onClick={button.onClick}
-                                    >
-                                        {button.label}
-                                    </button>
+                                    <Tooltip key={button.title} title={button.title} placement="top">
+                                        <button
+                                            type="button"
+                                            className="notepad-table-btn notepad-icon-btn"
+                                            onClick={button.onClick}
+                                            aria-label={button.title}
+                                        >
+                                            {button.icon}
+                                        </button>
+                                    </Tooltip>
                                 ))}
                             </div>
                         )}

@@ -109,6 +109,30 @@ const displayWithUnit = (value: unknown, unit: string, prefix?: string) => {
   return `${pre}${val} ${unit}`;
 };
 
+const buildMocEntries = (m: Record<string, unknown>) => {
+  const milestones = Array.isArray((m as any).mocMilestones) ? (m as any).mocMilestones : [];
+
+  if (milestones.length > 0) {
+    return milestones.map((milestone: any) => ({
+      label: String(milestone?.name ?? "MOC Milestone"),
+      value:
+        milestone?.initialCompletionStatus === "Yes"
+          ? `Yes | ${displayValue(milestone?.timelineMonths)} month(s) | ${formatDate(milestone?.targetDate)} | ${displayValue(milestone?.pbgDeduction)}%`
+          : "No",
+    }));
+  }
+
+  return [
+    { label: "Target MOC Efficiency", value: displayWithUnit((m as any).targetOverallMocEfficiency, "%") },
+    { label: "Baseline Efficiency", value: displayWithUnit((m as any).baselineMocEfficiency, "%") },
+    { label: "Annual Improvement", value: displayWithUnit((m as any).plannedAnnualImprovement, "%") },
+    { label: "Equipment Availability", value: displayWithUnit((m as any).equipmentAvailabilityTarget, "%") },
+    { label: "Energy Benchmark", value: displayWithUnit((m as any).energyUseBenchmark, "kWh/t") },
+    { label: "Measurement Cycle", value: displayValue((m as any).measurementFrequency) },
+    { label: "Notes", value: displayValue((m as any).mocRemarks) },
+  ].filter((entry) => entry.value !== "-");
+};
+
 const downloadFile = (file?: File) => {
   if (!file) return;
   const url = URL.createObjectURL(file);
@@ -216,15 +240,7 @@ export default function EDPP({ code }: EDPPProps) {
       },
       {
         title: "MOC Efficiency",
-        entries: [
-          { label: "Target MOC Efficiency", value: displayWithUnit((m as any).targetOverallMocEfficiency, "%") },
-          { label: "Baseline Efficiency", value: displayWithUnit((m as any).baselineMocEfficiency, "%") },
-          { label: "Annual Improvement", value: displayWithUnit((m as any).plannedAnnualImprovement, "%") },
-          { label: "Equipment Availability", value: displayWithUnit((m as any).equipmentAvailabilityTarget, "%") },
-          { label: "Energy Benchmark", value: displayWithUnit((m as any).energyUseBenchmark, "kWh/t") },
-          { label: "Measurement Cycle", value: displayValue((m as any).measurementFrequency) },
-          { label: "Notes", value: displayValue((m as any).mocRemarks) },
-        ],
+        entries: buildMocEntries(m as Record<string, unknown>),
       },
     ] as Array<{ title: string; entries: Array<{ label: string; value: string }> }>;
   }, [projectDetails]);

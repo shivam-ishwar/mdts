@@ -3,12 +3,12 @@ import "../styles/status-update.css";
 import "../styles/activity-details.css";
 import { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { AppsRounded, FolderOpenOutlined, SaveOutlined } from "@mui/icons-material";
+import { FolderOpenOutlined, SaveOutlined } from "@mui/icons-material";
 import { useLocation, useNavigate } from "react-router-dom";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { Button, Select, Modal, Input, InputNumber, Table, DatePicker, List, Typography, Form, Row, Col, Tag, Space, Tooltip, Tabs, Spin, Popover, Switch, Checkbox } from "antd";
-import { CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FilterOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined } from "@ant-design/icons";
+import { BellOutlined, CheckCircleFilled, ClockCircleOutlined, CloseCircleOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, EditOutlined, EyeOutlined, FileSyncOutlined, FileTextOutlined, FilterOutlined, FormOutlined, InfoCircleOutlined, LikeOutlined, PlusOutlined, ReloadOutlined, ShareAltOutlined, SyncOutlined } from "@ant-design/icons";
 import eventBus from "../Utils/EventEmitter";
 import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUser } from '../Utils/moduleStorage';
@@ -107,9 +107,11 @@ export const StatusUpdate = () => {
   const [confirmReplan, setConfirmReplan] = useState(false);
   const [userOptions, setUserOptions] = useState<any>([]);
   const [openResponsibilityModal, setOpenResponsibilityModal] = useState(false);
+  const [openNotificationModal, setOpenNotificationModal] = useState(false);
   const [openControllabilityModal, setOpenControllabilityModal] = useState(false);
   const [openStandardizeModal, setOpenStandardizeModal] = useState(false);
   const [raciForm] = Form.useForm();
+  const [notificationForm] = Form.useForm();
   const [controllabilityForm] = Form.useForm();
   const [standardizeForm] = Form.useForm();
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -141,7 +143,6 @@ export const StatusUpdate = () => {
   const [budgetLoading, setBudgetLoading] = useState(false);
   const [activityCost, setActivityCost] = useState<ActivityCost | null>(null);
   const [costLoading, setCostLoading] = useState(false);
-  const [isActionsPopoverOpen, setIsActionsPopoverOpen] = useState(false);
   const [isReadinessPopoverOpen, setIsReadinessPopoverOpen] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [activityDetailsVisible, setActivityDetailsVisible] = useState(false);
@@ -467,6 +468,17 @@ export const StatusUpdate = () => {
       }
     }
   }, [openResponsibilityModal, selectedActivityKey]);
+
+  useEffect(() => {
+    if (openNotificationModal && selectedActivityKey) {
+      const activity = findActivityByKey(dataSource, selectedActivityKey);
+      if (activity?.notifications) {
+        notificationForm.setFieldsValue(activity.notifications);
+      } else {
+        notificationForm.resetFields();
+      }
+    }
+  }, [openNotificationModal, selectedActivityKey, dataSource, notificationForm]);
 
   useEffect(() => {
     if (openControllabilityModal && selectedActivityKey) {
@@ -2293,6 +2305,10 @@ export const StatusUpdate = () => {
     setOpenResponsibilityModal(true);
   };
 
+  const handleOpenNotificationModal = () => {
+    setOpenNotificationModal(true);
+  };
+
   const handleOpenControllabilityModal = () => {
     setOpenControllabilityModal(true);
   };
@@ -2300,6 +2316,11 @@ export const StatusUpdate = () => {
   const handleCloseResponsibility = () => {
     setOpenResponsibilityModal(false);
     raciForm.resetFields();
+  };
+
+  const handleCloseNotification = () => {
+    setOpenNotificationModal(false);
+    notificationForm.resetFields();
   };
 
   const handleCloseControllability = () => {
@@ -2325,6 +2346,10 @@ export const StatusUpdate = () => {
     } catch {
       setFormValid(false);
     }
+  };
+
+  const handleNotificationChange = () => {
+    setFormValid(true);
   };
 
   const findActivityByKey = (list: any[], key: string): any => {
@@ -2648,6 +2673,57 @@ export const StatusUpdate = () => {
       notify.success("Responsibilities updated successfully!");
     } catch (error) {
       console.error("Validation Failed:", error);
+    }
+  };
+
+  const handleConfirmNotification = async () => {
+    try {
+      const values = await notificationForm.validateFields();
+
+      const updatedDataSource = (prev: any[]): any[] =>
+        prev.map((item) => {
+          if (item.key == selectedActivityKey) {
+            return {
+              ...item,
+              notifications: values,
+            };
+          }
+          if (item.children) return { ...item, children: updatedDataSource(item.children) };
+          return item;
+        });
+
+      const newDataSource = updatedDataSource(dataSource);
+      setDataSource(newDataSource);
+
+      const updatedNotificationMap = new Map();
+      newDataSource.forEach((module: any) => {
+        module.children.forEach((activity: any) => {
+          if (activity.notifications) {
+            updatedNotificationMap.set(activity.Code, activity.notifications);
+          }
+        });
+      });
+
+      const updatedSequencedModules = sequencedModules.map((module: any) => ({
+        ...module,
+        activities: module.activities.map((activity: any) => ({
+          ...activity,
+          ...(updatedNotificationMap.has(activity.code)
+            ? { notifications: updatedNotificationMap.get(activity.code) }
+            : {}),
+        })),
+      }));
+
+      setSequencedModules(updatedSequencedModules);
+      await db.updateProjectTimeline(
+        selectedProjectTimeline.versionId || selectedProjectTimeline.timelineId,
+        updatedSequencedModules
+      );
+
+      notify.success("Notifications updated successfully!");
+      handleCloseNotification();
+    } catch (error) {
+      console.error("Notification validation failed:", error);
     }
   };
 
@@ -3413,53 +3489,137 @@ export const StatusUpdate = () => {
     <>
 <div className="status-heading">
   <div className="status-update-header">
-    <div>
-    <p className="page-heading-title">Status Update</p>
-    <span className="pl-subtitle">Update activity progress, actual dates, and execution status</span>
+    <div className="status-heading-main">
+      <div className="status-heading-copy">
+        <p className="page-heading-title">Status Update</p>
+        <span className="pl-subtitle">Update activity progress, actual dates, and execution status</span>
+      </div>
     </div>
 
-    {selectedProject?.projectTimeline != null && (
-      <div className="status-approval">
-        <span className="status-approval-label">Approval Status:</span>
-        <span
-          className={
-            selectedProjectTimeline?.status?.toLowerCase() === "approved"
-              ? "status-approval-value badge badge-success"
-              : selectedProjectTimeline?.status?.toLowerCase() === "pending"
-              ? "status-approval-value badge badge-warning"
-              : selectedProjectTimeline?.status?.toLowerCase() === "replanned"
-              ? "status-approval-value badge status-badge-replanned"
-              : "status-approval-value badge badge-error"
-          }
-        >
-          {selectedProjectTimeline?.status}
-        </span>
-      </div>
-    )}
+    <div className="status-heading-right">
+      {allProjects.length !== 0 && (
+        <div className="status-heading-selects">
+          <div className="select-item">
+            <div className="flex-item flex-item--project">
+              <label className="label">Project</label>
+              <Select
+                placeholder="Select Project"
+                value={selectedProjectId}
+                onChange={handleProjectChange}
+                popupMatchSelectWidth={false}
+                className="status-select status-project-select"
+                disabled={replaneMode}
+              >
+                {allProjects.map((project) => (
+                  <Option key={project.id} value={project.id}>
+                    {project.projectParameters.projectName}
+                  </Option>
+                ))}
+              </Select>
+            </div>
 
-    {selectedProject?.projectTimeline != null && (
-      <div className="status-times">
-        <div className="status-time-row">
-          <p className="status-time-label">Created&nbsp;/&nbsp;Updated By</p>
-          <p className="status-time-value">{selectedProjectTimeline?.addedBy || "N/A"}</p>
+            {allVersions?.length > 0 && (
+              <div className="flex-item flex-item--version">
+                <label className="label">Version</label>
+                <Select
+                  placeholder="Select Version"
+                  value={{
+                    value: selectedVersionId,
+                    label: (
+                      <span className="status-select-label">
+                        {selectedProjectTimeline?.status === "pending" ? (
+                          <ClockCircleOutlined className="status-icon status-icon--pending" />
+                        ) : selectedProjectTimeline?.status === "replanned" ? (
+                          <SyncOutlined className="status-icon status-icon--replanned" />
+                        ) : selectedProjectTimeline?.status === "Revised" ? (
+                          <EditOutlined className="status-icon status-icon--revised" />
+                        ) : selectedProjectTimeline?.status === "amendment pending" ? (
+                          <FileSyncOutlined className="status-icon status-icon--amendment" />
+                        ) : (
+                          <LikeOutlined className="status-icon status-icon--approved" />
+                        )}
+                        {selectedProjectTimeline?.version}
+                      </span>
+                    ),
+                  }}
+                  onChange={(valueObj) => {
+                    const value = valueObj.value;
+                    const selectedVersion = allVersions.find((version: any) => version.versionId == value);
+                    setSelectedProjectTimeline(selectedVersion);
+                    setSelectedVersionId(value);
+                    handleChangeVersionTimeline(value);
+                    setSelectedActivityKey(null);
+                  }}
+                  disabled={replaneMode}
+                  popupMatchSelectWidth={false}
+                  className="status-select status-version-select"
+                  labelInValue
+                >
+                  {allVersions?.map((version: any) => (
+                    <Option key={version.versionId} value={version.versionId}>
+                      <span className="status-select-option">
+                        {version.status === "pending" ? (
+                          <ClockCircleOutlined className="status-icon status-icon--pending" />
+                        ) : version.status === "replanned" ? (
+                          <SyncOutlined className="status-icon status-icon--replanned" />
+                        ) : version.status === "amendment pending" ? (
+                          <FileSyncOutlined className="status-icon status-icon--amendment" />
+                        ) : (
+                          <LikeOutlined className="status-icon status-icon--approved" />
+                        )}
+                        {version.version}
+                      </span>
+                    </Option>
+                  ))}
+                </Select>
+              </div>
+            )}
+          </div>
         </div>
-        <div className="status-time-row">
-          <p className="status-time-label">Created&nbsp;/&nbsp;Updated At</p>
-          <p className="status-time-value">
-            {selectedProjectTimeline?.createdAt
-              ? new Date(selectedProjectTimeline.createdAt).toLocaleString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })
-              : "N/A"}
-          </p>
+      )}
+
+      {selectedProject?.projectTimeline != null && (
+        <div className="status-meta">
+          <div className="status-meta-item">
+            <p className="status-meta-label">Approval Status</p>
+            <div className="status-meta-value status-meta-value--badge">
+              <span
+                className={
+                  selectedProjectTimeline?.status?.toLowerCase() === "approved"
+                    ? "status-approval-value badge badge-success"
+                    : selectedProjectTimeline?.status?.toLowerCase() === "pending"
+                    ? "status-approval-value badge badge-warning"
+                    : selectedProjectTimeline?.status?.toLowerCase() === "replanned"
+                    ? "status-approval-value badge status-badge-replanned"
+                    : "status-approval-value badge badge-error"
+                }
+              >
+                {selectedProjectTimeline?.status}
+              </span>
+            </div>
+          </div>
+          <div className="status-meta-item">
+            <p className="status-meta-label">Created / Updated By</p>
+            <div className="status-meta-value">{selectedProjectTimeline?.addedBy || "N/A"}</div>
+          </div>
+          <div className="status-meta-item">
+            <p className="status-meta-label">Created / Updated At</p>
+            <div className="status-meta-value">
+              {selectedProjectTimeline?.createdAt
+                ? new Date(selectedProjectTimeline.createdAt).toLocaleString("en-US", {
+                    year: "numeric",
+                    month: "short",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  })
+                : "N/A"}
+            </div>
+          </div>
         </div>
-      </div>
-    )}
+      )}
+    </div>
   </div>
 </div>
 
@@ -3467,115 +3627,10 @@ export const StatusUpdate = () => {
   {allProjects.length !== 0 && (
     <>
       <div className="status-toolbar">
-        <div className="select-item">
-          <div className="flex-item">
-            <label className="label">Project</label>
-            <Select
-              placeholder="Select Project"
-              value={selectedProjectId}
-              onChange={handleProjectChange}
-              popupMatchSelectWidth={false}
-              className="status-select status-project-select"
-              disabled={replaneMode}
-            >
-              {allProjects.map((project) => (
-                <Option key={project.id} value={project.id}>
-                  {project.projectParameters.projectName}
-                </Option>
-              ))}
-            </Select>
-          </div>
-
-          {allVersions?.length > 0 && (
-            <div className="flex-item">
-              <label className="label">Version</label>
-              <Select
-                placeholder="Select Version"
-                value={{
-                  value: selectedVersionId,
-                  label: (
-                    <span className="status-select-label">
-                      {selectedProjectTimeline?.status === "pending" ? (
-                        <ClockCircleOutlined className="status-icon status-icon--pending" />
-                      ) : selectedProjectTimeline?.status === "replanned" ? (
-                        <SyncOutlined className="status-icon status-icon--replanned" />
-                      ) : selectedProjectTimeline?.status === "Revised" ? (
-                        <EditOutlined className="status-icon status-icon--revised" />
-                      ) : selectedProjectTimeline?.status === "amendment pending" ? (
-                        <FileSyncOutlined className="status-icon status-icon--amendment" />
-                      ) : (
-                        <LikeOutlined className="status-icon status-icon--approved" />
-                      )}
-                      {selectedProjectTimeline?.version}
-                    </span>
-                  ),
-                }}
-                onChange={(valueObj) => {
-                  const value = valueObj.value;
-                  const selectedVersion = allVersions.find((version: any) => version.versionId == value);
-                  setSelectedProjectTimeline(selectedVersion);
-                  setSelectedVersionId(value);
-                  handleChangeVersionTimeline(value);
-                  setSelectedActivityKey(null);
-                }}
-                disabled={replaneMode}
-                popupMatchSelectWidth={false}
-                className="status-select status-version-select"
-                labelInValue
-              >
-                {allVersions?.map((version: any) => (
-                  <Option key={version.versionId} value={version.versionId}>
-                    <span className="status-select-option">
-                      {version.status === "pending" ? (
-                        <ClockCircleOutlined className="status-icon status-icon--pending" />
-                      ) : version.status === "replanned" ? (
-                        <SyncOutlined className="status-icon status-icon--replanned" />
-                      ) : version.status === "amendment pending" ? (
-                        <FileSyncOutlined className="status-icon status-icon--amendment" />
-                      ) : (
-                        <LikeOutlined className="status-icon status-icon--approved" />
-                      )}
-                      {version.version}
-                    </span>
-                  </Option>
-                ))}
-              </Select>
-            </div>
-          )}
-        </div>
-
         {selectedProject?.projectTimeline != null && (
           <div className="actions">
-            {selectedProjectTimeline?.status == "Approved" && (
-              <Button
-                type={isStatusUpdateMode ? "primary" : "default"}
-                icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
-                onClick={() => {
-                  if (isStatusUpdateMode) {
-                    handleSaveStatus();
-                  } else {
-                    handleUpdateStatus();
-                  }
-                }}
-                className={
-                  isStatusUpdateMode
-                    ? "project-timeline-btn project-timeline-btn-status-save"
-                    : "project-timeline-btn project-timeline-btn-status-update"
-                }
-              >
-                {isStatusUpdateMode ? "Save Status" : "Update Status"}
-              </Button>
-            )}
-            <Popover
-              trigger="click"
-              placement="bottomRight"
-              overlayClassName="status-actions-popover"
-              open={isActionsPopoverOpen}
-              onOpenChange={setIsActionsPopoverOpen}
-              content={
-                <div className="status-actions-panel">
-                  <div className="status-actions-title">Quick Actions</div>
-                  <div className="status-actions-grid">
+            <div className="status-actions-inline-wrap">
+              <div className="status-actions-grid status-actions-grid--inline">
                   {!isReplannedTimeline && (
                     withDisabledHint(
                       <Button
@@ -3583,7 +3638,6 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           handleOpenDocumentsModal(selectedActivityKey);
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-docs"
                       >
@@ -3601,7 +3655,6 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           handleOpenCostCalcModal();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-cost"
                       >
@@ -3619,7 +3672,6 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           showResponsibilityModal();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-raci"
                       >
@@ -3637,7 +3689,6 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           setNoteModalVisible(true);
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-note"
                       >
@@ -3645,6 +3696,21 @@ export const StatusUpdate = () => {
                       </Button>,
                       !selectedActivityKey,
                       "Select a key activity row first, then add or edit Note."
+                    )
+                  )}
+
+                  {!isReplannedTimeline && (
+                    withDisabledHint(
+                      <Button
+                        icon={<BellOutlined />}
+                        disabled={!selectedActivityKey}
+                        onClick={handleOpenNotificationModal}
+                        className="project-timeline-btn project-timeline-btn-notification"
+                      >
+                        Notifications
+                      </Button>,
+                      !selectedActivityKey,
+                      "Select a key activity row first, then configure Notifications."
                     )
                   )}
 
@@ -3659,7 +3725,6 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           handleOpenControllabilityModal();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-controllability"
                       >
@@ -3677,11 +3742,10 @@ export const StatusUpdate = () => {
                         disabled={!selectedActivityKey}
                         onClick={() => {
                           handleOpenStandardizeModal();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-standardize"
                       >
-                        Standerize
+                        Standardize
                       </Button>,
                       !selectedActivityKey,
                       "Select a key activity row first, then Standardize it."
@@ -3696,7 +3760,6 @@ export const StatusUpdate = () => {
                         icon={<DownloadOutlined />}
                         onClick={() => {
                           handleDownload();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-download"
                       >
@@ -3724,7 +3787,6 @@ export const StatusUpdate = () => {
                           } else {
                             rePlanTimeline();
                           }
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-edit"
                       >
@@ -3742,7 +3804,6 @@ export const StatusUpdate = () => {
                         icon={<ShareAltOutlined />}
                         onClick={() => {
                           showModal();
-                          setIsActionsPopoverOpen(false);
                         }}
                         className="project-timeline-btn project-timeline-btn-share"
                       >
@@ -3763,7 +3824,6 @@ export const StatusUpdate = () => {
                             disabled={!selectedProjectId}
                             onClick={() => {
                               setIsReviseModalOpen(true);
-                              setIsActionsPopoverOpen(false);
                             }}
                             className="project-timeline-btn project-timeline-btn-revise"
                           >
@@ -3778,7 +3838,6 @@ export const StatusUpdate = () => {
                             disabled={!selectedProjectId}
                             onClick={() => {
                               setIsApproveModalOpen(true);
-                              setIsActionsPopoverOpen(false);
                             }}
                             className="project-timeline-btn project-timeline-btn-approve"
                           >
@@ -3788,37 +3847,48 @@ export const StatusUpdate = () => {
                           "Choose a project first, then Approve the timeline."
                         )}
                       </>
-                    )}
-                  </div>
-                </div>
-              }
-            >
-              <Tooltip title="Quick actions — documents, budgetary, RACI, notes, and more">
+                  )}
+              </div>
+            </div>
+            <div className="status-actions-primary">
+              {selectedProjectTimeline?.status == "Approved" && (
                 <Button
-                  type="default"
-                  icon={<AppsRounded className="status-actions-trigger-icon" />}
-                  className="project-timeline-btn status-actions-trigger"
-                  aria-label="Open quick actions menu"
-                />
-              </Tooltip>
-            </Popover>
-            <Popover
-              trigger="click"
-              placement="bottomRight"
-              overlayClassName="status-readiness-popover"
-              open={isReadinessPopoverOpen}
-              onOpenChange={setIsReadinessPopoverOpen}
-              content={readinessFilterContent}
-            >
-              <Tooltip title="Filter activities by readiness details">
-                <Button
-                  type="default"
-                  icon={<FilterOutlined />}
-                  className={`project-timeline-btn status-actions-trigger status-actions-trigger-filter${hasReadinessFilters ? " status-actions-trigger-filter-active" : ""}`}
-                  aria-label="Open readiness filters"
-                />
-              </Tooltip>
-            </Popover>
+                  type={isStatusUpdateMode ? "primary" : "default"}
+                  icon={isStatusUpdateMode ? <SaveOutlined /> : <FormOutlined />}
+                  onClick={() => {
+                    if (isStatusUpdateMode) {
+                      handleSaveStatus();
+                    } else {
+                      handleUpdateStatus();
+                    }
+                  }}
+                  className={
+                    isStatusUpdateMode
+                      ? "project-timeline-btn project-timeline-btn-status-save"
+                      : "project-timeline-btn project-timeline-btn-status-update"
+                  }
+                >
+                  {isStatusUpdateMode ? "Save Status" : "Update Status"}
+                </Button>
+              )}
+              <Popover
+                trigger="click"
+                placement="bottomRight"
+                overlayClassName="status-readiness-popover"
+                open={isReadinessPopoverOpen}
+                onOpenChange={setIsReadinessPopoverOpen}
+                content={readinessFilterContent}
+              >
+                <Tooltip title="Filter activities by readiness details">
+                  <Button
+                    type="default"
+                    icon={<FilterOutlined />}
+                    className={`project-timeline-btn status-actions-trigger status-actions-trigger-filter${hasReadinessFilters ? " status-actions-trigger-filter-active" : ""}`}
+                    aria-label="Open readiness filters"
+                  />
+                </Tooltip>
+              </Popover>
+            </div>
           </div>
         )}
       </div>
@@ -4419,13 +4489,13 @@ export const StatusUpdate = () => {
         className="modal-container"
         maskClosable={false}
         keyboard={false}
-      >
-        <Form
-          form={controllabilityForm}
-          layout="vertical"
-          preserve={false}
-          style={{ padding: "0px 10px" }}
         >
+          <Form
+            form={controllabilityForm}
+            layout="vertical"
+            preserve={false}
+            style={{ padding: "0px 10px" }}
+          >
           <Form.Item
             label="Risk Factor"
             name="controllabilityFactor"
@@ -4440,6 +4510,65 @@ export const StatusUpdate = () => {
               ]}
             />
           </Form.Item>
+          </Form>
+        </Modal>
+
+      <Modal
+        title="Configure Notifications"
+        open={openNotificationModal}
+        onCancel={handleCloseNotification}
+        onOk={handleConfirmNotification}
+        maskClosable={false}
+        keyboard={false}
+        destroyOnClose
+        className="modal-container"
+      >
+        <Form
+          form={notificationForm}
+          layout="vertical"
+          onValuesChange={handleNotificationChange}
+          style={{ padding: "0px 10px", display: "flex", flexDirection: "column", gap: "10px" }}
+        >
+          {["started", "completed", "delayed"].map((key) => (
+            <Form.Item label="" key={key}>
+              <Row align="middle" gutter={8}>
+                <Col flex="150px" style={{ textTransform: "capitalize" }}>
+                  {key}
+                </Col>
+                <Col>
+                  <Form.Item name={[key, "enabled"]} valuePropName="checked" noStyle>
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col flex="auto">
+                  {key !== "delayed" ? (
+                    <Form.Item name={[key, "message"]} noStyle>
+                      <Input placeholder="Enter text here" />
+                    </Form.Item>
+                  ) : (
+                    <Form.Item
+                      shouldUpdate={(prev, curr) => prev?.delayed?.enabled !== curr?.delayed?.enabled}
+                      noStyle
+                    >
+                      {({ getFieldValue }) => {
+                        const enabled = getFieldValue(["delayed", "enabled"]);
+                        return (
+                          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                            <Form.Item name={[key, "days"]} noStyle>
+                              <InputNumber min={1} placeholder="Days" style={{ width: 90 }} disabled={!enabled} />
+                            </Form.Item>
+                            <Form.Item name={[key, "message"]} noStyle>
+                              <Input placeholder="Delay message" disabled={!enabled} />
+                            </Form.Item>
+                          </div>
+                        );
+                      }}
+                    </Form.Item>
+                  )}
+                </Col>
+              </Row>
+            </Form.Item>
+          ))}
         </Form>
       </Modal>
 

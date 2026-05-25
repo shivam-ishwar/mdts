@@ -381,7 +381,7 @@ const Navbar: React.FC = () => {
                 <Button onClick={handleSeeAllProfiles} type="text" className="see-profiles-btn">See all profiles</Button>
             </div>
             <Menu.Item key="/settings" onClick={() => navigate("/settings")} icon={<SettingOutlined />}>
-                Settings & privacy
+                Settings
             </Menu.Item>
             <Menu.Item key="/support" icon={<QuestionCircleOutlined />}>
                 Help & support

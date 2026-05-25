@@ -34,12 +34,12 @@
 }
 
 .status-heading {
-    border: 1px solid #ddd;
+    border: 1px solid #d9e3ea;
     background: var(--su-surface);
-    padding: 10px 12px;
+    padding: 12px 16px;
     margin: 8px;
-    border-radius: var(--radius-md);
-    box-shadow: var(--su-shadow);
+    border-radius: 16px;
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
 }
 
 .status-update-header {
@@ -47,6 +47,51 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 14px;
+    flex-wrap: nowrap;
+}
+
+.status-heading-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 0 1 320px;
+}
+
+.status-heading-right {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 14px;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.status-heading-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.status-heading-selects {
+    display: flex;
+    justify-content: flex-end;
+    min-width: 0;
+    flex-wrap: nowrap;
+    flex: 0 1 auto;
+}
+
+.status-heading .page-heading-title {
+    margin: 0;
+    font-size: 22px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+.status-heading .pl-subtitle {
+    font-size: 13px;
+    line-height: 1.4;
+    color: #667085;
 }
 
 .status-title {
@@ -57,28 +102,10 @@
     line-height: 1.2;
 }
 
-.status-approval {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 10px;
-    border: 1px solid var(--su-border);
-    border-radius: 999px;
-    background: var(--su-muted);
-    color: var(--su-text-2);
-    white-space: nowrap;
-}
-
-.status-approval-label {
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--su-text-muted);
-}
-
 .status-approval-value {
     text-transform: uppercase;
-    font-weight: 900;
-    letter-spacing: .02em;
+    font-weight: 800;
+    letter-spacing: .04em;
 }
 
 .status-badge-replanned {
@@ -87,55 +114,101 @@
     color: #6f42c1;
 }
 
-.status-times {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    line-height: 1.1;
-}
-
-.status-time-row {
-    display: flex;
+.status-meta {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
     gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.status-meta-item {
+    display: grid;
+    gap: 6px;
+    min-width: 180px;
+}
+
+.status-meta-label {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #7b8794;
+}
+
+.status-meta-value {
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid #dbe5ec;
+    border-radius: 10px;
+    background: #f8fafc;
+    display: inline-flex;
     align-items: center;
-}
-
-.status-time-label {
-    color: var(--su-text-muted);
-    font-weight: 900;
-    min-width: 160px;
-    margin: 0;
+    color: #1f2937;
     font-size: 12px;
+    font-weight: 700;
     white-space: nowrap;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
-.status-time-value {
-    margin: 0;
-    font-weight: 900;
-    color: var(--su-accent);
-    font-size: 12px;
+.status-meta-value--badge {
+    justify-content: flex-start;
 }
 
 .status-toolbar {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    justify-content: flex-end;
+    align-items: flex-start;
     gap: 12px;
-    padding: 0px 10px 0px 0px;
+    padding: 8px 10px 10px;
 }
 
 .select-item {
     display: flex;
-    padding: 10px;
-    gap: 10px;
-    align-items: center;
+    padding: 3px 0;
+    gap: 8px;
+    align-items: flex-end;
+    flex-wrap: nowrap;
+    width: fit-content;
 }
 
 .flex-item {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 200px;
+    gap: 5px;
+    min-width: 220px;
+}
+
+.flex-item--project {
+    min-width: 280px;
+}
+
+.flex-item--version {
+    min-width: 120px;
+    max-width: 140px;
+}
+
+.status-heading .label {
+    margin: 0 0 1px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: #7b8794;
+}
+
+.status-heading :is(.status-project-select, .status-version-select).ant-select .ant-select-selector {
+    height: 38px !important;
+    border-radius: 10px !important;
+    border-color: #d4dde6 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    padding: 0 12px !important;
+}
+
+.status-heading :is(.status-project-select, .status-version-select).ant-select .ant-select-selection-item,
+.status-heading :is(.status-project-select, .status-version-select).ant-select .ant-select-selection-placeholder {
+    line-height: 36px !important;
+    font-size: 12px;
 }
 
 .status-project-select,
@@ -176,10 +249,48 @@
 
 .actions {
     display: flex;
-    gap: 10px;
-    justify-content: center;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
     align-items: center;
-    flex-wrap: wrap;
+    justify-content: flex-end;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.actions::-webkit-scrollbar {
+    display: none;
+}
+
+.status-actions-primary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    order: 2;
+    flex: 0 0 auto;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: 0;
+}
+
+.status-actions-inline-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+    order: 1;
+    flex: 1 1 auto;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+}
+
+.status-actions-inline-wrap::-webkit-scrollbar {
+    display: none;
 }
 
 .status-actions-popover .ant-popover-inner {
@@ -212,212 +323,125 @@
     min-width: 320px;
 }
 
+.status-actions-grid--inline {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-width: max-content;
+    justify-content: flex-start;
+    width: max-content;
+}
+
 .status-actions-disabled-wrap {
     display: block;
     width: 100%;
 }
 
-.status-actions-grid .project-timeline-btn.ant-btn {
-    width: 100%;
-    height: 92px;
-    border-radius: 16px;
-    background: linear-gradient(180deg, #ffffff 0%, #f6fbf8 100%) !important;
-    border: 1px solid #d9ece5 !important;
-    color: #1f2937 !important;
-    box-shadow: 0 6px 16px rgba(31, 122, 99, 0.08);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 8px;
-    padding: 10px 6px !important;
-    text-align: center;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.2;
-    white-space: normal;
+.status-actions-grid--inline .status-actions-disabled-wrap {
+    display: inline-flex;
+    width: auto;
 }
 
-.status-actions-grid .project-timeline-btn.ant-btn .anticon {
-    width: 34px;
-    height: 34px;
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn {
+    width: auto;
+    min-width: 110px;
+    height: 38px;
+    padding: 0 12px !important;
+    border-radius: 10px;
     display: inline-flex;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    border-radius: 999px;
-    background: linear-gradient(180deg, #34d399 0%, #1f7a63 100%);
-    color: #ffffff;
-    box-shadow: 0 8px 16px rgba(31, 122, 99, 0.24);
-    margin: 0 auto;
-    font-size: 16px;
+    gap: 7px;
+    white-space: nowrap;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    background: #ffffff !important;
+    border: 1px solid #d8e1e8 !important;
+    color: #1f2937 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.status-actions-grid .project-timeline-btn-docs.ant-btn:not([disabled]) {
-    border-color: rgba(14, 116, 144, 0.28) !important;
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn .anticon {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    font-size: 14px;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: currentColor !important;
+    border-radius: 0;
 }
 
-.status-actions-grid .project-timeline-btn-docs.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #22d3ee 0%, #0e7490 100%);
-    box-shadow: 0 8px 16px rgba(14, 116, 144, 0.25);
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn .status-custom-action-icon {
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border-radius: 0;
 }
 
-.status-actions-grid .project-timeline-btn-cost.ant-btn:not([disabled]) {
-    border-color: rgba(217, 119, 6, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-cost.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
-    box-shadow: 0 8px 16px rgba(217, 119, 6, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-raci.ant-btn:not([disabled]) {
-    border-color: rgba(37, 99, 235, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-raci.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
-    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-note.ant-btn:not([disabled]) {
-    border-color: rgba(147, 51, 234, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-note.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #c084fc 0%, #9333ea 100%);
-    box-shadow: 0 8px 16px rgba(147, 51, 234, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-controllability.ant-btn:not([disabled]) {
-    border-color: rgba(234, 88, 12, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-controllability.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
-    box-shadow: 0 8px 16px rgba(234, 88, 12, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-controllability.ant-btn .status-custom-action-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 999px;
+.status-actions-grid--inline .project-timeline-btn-controllability.ant-btn .status-custom-action-icon {
     overflow: hidden;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin: 0 auto;
 }
 
-.status-actions-grid .project-timeline-btn-controllability.ant-btn .status-custom-action-icon img {
+.status-actions-grid--inline .project-timeline-btn-controllability.ant-btn .status-custom-action-icon img {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
-.status-actions-grid .project-timeline-btn-standardize.ant-btn:not([disabled]) {
-    border-color: rgba(16, 185, 129, 0.28) !important;
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn[disabled] {
+    background: #f7f9fb !important;
+    border-color: #e6edf2 !important;
+    color: #9aa6b2 !important;
+    box-shadow: none;
 }
 
-.status-actions-grid .project-timeline-btn-standardize.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #34d399 0%, #059669 100%);
-    box-shadow: 0 8px 16px rgba(5, 150, 105, 0.25);
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn[disabled] .anticon {
+    color: #9aa6b2 !important;
 }
 
-.status-actions-grid .project-timeline-btn-download.ant-btn:not([disabled]) {
-    border-color: rgba(22, 163, 74, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-download.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
-    box-shadow: 0 8px 16px rgba(22, 163, 74, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-edit.ant-btn:not([disabled]) {
-    border-color: rgba(124, 58, 237, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-edit.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
-    box-shadow: 0 8px 16px rgba(124, 58, 237, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-share.ant-btn:not([disabled]) {
-    border-color: rgba(8, 145, 178, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-share.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #22d3ee 0%, #0891b2 100%);
-    box-shadow: 0 8px 16px rgba(8, 145, 178, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-status-update.ant-btn:not([disabled]),
-.status-actions-grid .project-timeline-btn-status-save.ant-btn:not([disabled]) {
-    border-color: rgba(99, 102, 241, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-status-update.ant-btn:not([disabled]) .anticon,
-.status-actions-grid .project-timeline-btn-status-save.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
-    box-shadow: 0 8px 16px rgba(99, 102, 241, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-revise.ant-btn:not([disabled]) {
-    border-color: rgba(220, 38, 38, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-revise.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
-    box-shadow: 0 8px 16px rgba(220, 38, 38, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn-approve.ant-btn:not([disabled]) {
-    border-color: rgba(5, 150, 105, 0.28) !important;
-}
-
-.status-actions-grid .project-timeline-btn-approve.ant-btn:not([disabled]) .anticon {
-    background: linear-gradient(180deg, #2dd4bf 0%, #0f766e 100%);
-    box-shadow: 0 8px 16px rgba(15, 118, 110, 0.25);
-}
-
-.status-actions-grid .project-timeline-btn.ant-btn:hover:not([disabled]) {
-    transform: translateY(-3px) scale(1.02);
-    border-color: rgba(31, 122, 99, 0.35) !important;
-    box-shadow: 0 14px 24px rgba(31, 122, 99, 0.14);
+:is(.status-actions-grid--inline, .status-actions-primary) .project-timeline-btn.ant-btn:hover:not([disabled]) {
+    transform: translateY(0);
+    border-color: #cfd9e2 !important;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
     background: #ffffff !important;
-}
-
-.status-actions-grid .project-timeline-btn.ant-btn[disabled] {
-    background: #f4f7f6 !important;
-    border-color: #e5edeb !important;
-    color: #94a3b8 !important;
-    box-shadow: none;
-}
-
-.status-actions-grid .project-timeline-btn.ant-btn[disabled] .anticon {
-    background: rgba(148, 163, 184, 0.25);
-    color: #94a3b8;
-    box-shadow: none;
-}
-
-.status-actions-grid .project-timeline-btn.ant-btn[disabled] .status-custom-action-icon {
-    opacity: 0.65;
 }
 
 .status-actions-trigger.ant-btn {
     width: 38px;
-    height: 25px;
-    border-radius: 999px;
-    padding: 0;
+    min-width: 38px !important;
+    height: 38px;
+    border-radius: 10px;
+    padding: 0 !important;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(100, 116, 139, 0.22);
-    background: #4b5563;
-    box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(15, 23, 42, 0.2);
+    border: 1px solid #d8e1e8 !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.status-actions-primary .status-actions-trigger.ant-btn {
+    margin-left: 0;
+}
+
+.status-actions-trigger.ant-btn:hover:not([disabled]) {
+    transform: translateY(0);
+    border-color: #cfd9e2 !important;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+    background: #ffffff !important;
 }
 
 .status-actions-trigger.ant-btn .anticon {
-    font-size: 20px;
-    color: #ffffff !important;
+    font-size: 14px;
+    color: #4b5563 !important;
     line-height: 1;
 }
 
@@ -427,12 +451,16 @@
 }
 
 .status-actions-trigger-filter.ant-btn .anticon {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .status-actions-trigger-filter-active.ant-btn {
-    background: linear-gradient(135deg, #1f7a63 0%, #2aa382 100%);
-    border-color: rgba(31, 122, 99, 0.5);
+    background: #f4fbf8 !important;
+    border-color: rgba(31, 122, 99, 0.28) !important;
+}
+
+.status-actions-trigger-filter-active.ant-btn .anticon {
+    color: #1f7a63 !important;
 }
 
 .status-readiness-popover .ant-popover-inner {
@@ -455,7 +483,7 @@
 }
 
 .project-timeline-btn.ant-btn:hover {
-    background: var(--su-text) !important;
+    background: #ffffff !important;
 }
 
 .project-timeline-btn.ant-btn:active {
@@ -469,86 +497,50 @@
     box-shadow: none;
 }
 
-.project-timeline-btn-docs.ant-btn:not([disabled]) {
-    background: var(--su-accent);
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
-.project-timeline-btn-docs.ant-btn:not([disabled]):hover {
-    background: var(--su-accent-hover);
-}
-
-.project-timeline-btn-cost.ant-btn:not([disabled]) {
-    background: var(--warning);
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
-.project-timeline-btn-raci.ant-btn:not([disabled]) {
-    background: var(--info);
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
-.project-timeline-btn-note.ant-btn:not([disabled]) {
-    background: var(--error);
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
-.project-timeline-btn-controllability.ant-btn:not([disabled]) {
-    background: #f97316;
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
+.project-timeline-btn-docs.ant-btn:not([disabled]),
+.project-timeline-btn-cost.ant-btn:not([disabled]),
+.project-timeline-btn-raci.ant-btn:not([disabled]),
+.project-timeline-btn-note.ant-btn:not([disabled]),
+.project-timeline-btn-controllability.ant-btn:not([disabled]),
 .project-timeline-btn-standardize.ant-btn:not([disabled]) {
-    background: #0f9d8a;
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #ffffff !important;
 }
 
 .project-timeline-btn-download.ant-btn:not([disabled]) {
-    background: var(--success);
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #f4fbf7 !important;
+    border-color: rgba(22, 163, 74, 0.2) !important;
+    color: #157347 !important;
 }
 
 .project-timeline-btn-edit.ant-btn:not([disabled]) {
-    background: #715147ff;
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #faf7ff !important;
+    border-color: rgba(124, 58, 237, 0.18) !important;
+    color: #6d28d9 !important;
 }
 
 .project-timeline-btn-share.ant-btn:not([disabled]) {
-    background: #00BFA6;
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #f4fbff !important;
+    border-color: rgba(8, 145, 178, 0.18) !important;
+    color: #0f7490 !important;
 }
 
-.project-timeline-btn-status-update.ant-btn:not([disabled]) {
-    background: #5C6BC0;
-    border-color: transparent;
-    color: var(--text-inverse);
-}
-
+.project-timeline-btn-status-update.ant-btn:not([disabled]),
 .project-timeline-btn-status-save.ant-btn:not([disabled]) {
-    background: #AB47BC;
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #f5f7ff !important;
+    border-color: rgba(79, 70, 229, 0.18) !important;
+    color: #4338ca !important;
 }
 
 .project-timeline-btn-revise.ant-btn:not([disabled]) {
-    background: rgba(185, 28, 28, .75);
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #fff5f5 !important;
+    border-color: rgba(220, 38, 38, 0.16) !important;
+    color: #c81e1e !important;
 }
 
 .project-timeline-btn-approve.ant-btn:not([disabled]) {
-    background: #258780;
-    border-color: transparent;
-    color: var(--text-inverse);
+    background: #f0fdf9 !important;
+    border-color: rgba(5, 150, 105, 0.16) !important;
+    color: #0f766e !important;
 }
 
 .action-btn {
@@ -634,6 +626,67 @@
     gap: 10px;
     margin: 5px 10px 10px 0;
     justify-content: flex-end;
+}
+
+@media (max-width: 1280px) {
+    .status-update-header {
+        flex-wrap: wrap;
+    }
+
+    .status-heading-right {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .status-toolbar {
+        justify-content: stretch;
+    }
+
+    .status-heading-main,
+    .status-heading-selects,
+    .actions {
+        width: 100%;
+    }
+
+    .actions {
+        justify-content: flex-start;
+    }
+
+    .status-actions-primary,
+    .status-actions-inline-wrap {
+        justify-content: flex-start;
+    }
+
+    .status-actions-primary {
+        flex-wrap: nowrap;
+        margin-left: 0;
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .status-actions-inline-wrap {
+        flex: 1 1 auto;
+    }
+
+    .select-item {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .flex-item {
+        min-width: 220px;
+        flex: 1 1 220px;
+    }
+
+    .status-actions-grid--inline {
+        justify-content: flex-start;
+    }
+
+    .status-meta {
+        width: 100%;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
 }
 
 .project-timeline-btn-discard.ant-btn:not([disabled]) {

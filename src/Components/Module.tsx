@@ -106,6 +106,7 @@ const Module = () => {
     const [importFromType, setImportFromType] = useState("");
     const [selectedImportModule, setSelectedImportModule] = useState(null);
     const [moduleNameError, setModuleNameError] = useState("");
+    const [moduleCodeError, setModuleCodeError] = useState("");
     const hasActiveModule = Boolean(moduleData?.parentModuleCode);
 
     useEffect(() => {
@@ -263,18 +264,43 @@ const Module = () => {
                 return;
             }
 
+            const normalizedName = normalizeModuleName(moduleData.moduleName);
+            const normalizedCode = normalizeModuleCode(moduleData.parentModuleCode);
+            const normalizedActivities = remapActivitiesForModuleCode(
+                normalizedCode,
+                moduleData.activities || []
+            );
+            const { nextNameError, nextCodeError } = validateModuleIdentity({
+                name: normalizedName,
+                code: normalizedCode,
+                mineType: moduleData.mineType || "",
+                excludeId: moduleData.id,
+            });
+
+            if (nextNameError || nextCodeError) {
+                notify.error(nextNameError || nextCodeError);
+                return;
+            }
+
+            const payload = {
+                ...moduleData,
+                moduleName: normalizedName,
+                parentModuleCode: normalizedCode,
+                activities: normalizedActivities,
+            };
+
             if (isEditing) {
-                if (!moduleData.id || typeof moduleData.id !== "number") {
+                if (!payload.id || typeof payload.id !== "number") {
                     notify.error("Invalid module ID. Unable to update module.");
                     return;
                 }
 
-                const existingModule = await db.modules.get(moduleData.id);
+                const existingModule = await db.modules.get(payload.id);
 
                 if (existingModule) {
-                    const updatedCount = await db.modules.update(moduleData.id, {
+                    const updatedCount = await db.modules.update(payload.id, {
                         ...existingModule,
-                        ...moduleData,
+                        ...payload,
                     });
 
                     if (updatedCount) {
@@ -287,7 +313,7 @@ const Module = () => {
                     notify.error("Module not found in IndexedDB.");
                 }
             } else {
-                await db.addModule({ ...moduleData, userId });
+                await db.addModule({ ...payload, userId });
                 notify.success("Module saved successfully!");
                 setOpenPostSaveModal(true);
                 const mods = await db.getModules();
@@ -515,8 +541,152 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setSelectedActivityRow(nextSelected);
     };
 
-    const handleEdit = (field: any, value: any) => {
-        setModuleData((prev: any) => ({ ...prev, [field]: value }));
+    const normalizeModuleName = (value: any) =>
+        String(value ?? "").trim().replace(/\s+/g, " ");
+
+    const normalizeModuleCode = (value: any) =>
+        String(value ?? "").trim().toUpperCase();
+
+    const remapActivitiesForModuleCode = (nextModuleCode: string, activities: any[] = []) => {
+        const currentActivities = Array.isArray(activities) ? activities : [];
+        const originalById = new Map(
+            currentActivities.map((activity: any) => [String(getActivityId(activity) ?? ""), activity])
+        );
+        const previousCodeById = new Map(
+            currentActivities.map((activity: any) => [
+                String(getActivityId(activity) ?? ""),
+                String(activity?.code ?? "").trim(),
+            ])
+        );
+
+        const regeneratedActivities = regenerateCodes(nextModuleCode, currentActivities);
+        const nextCodeByPreviousCode = new Map<string, string>();
+
+        regeneratedActivities.forEach((activity: any) => {
+            const activityId = String(getActivityId(activity) ?? "");
+            const previousCode = previousCodeById.get(activityId);
+            const nextCode = String(activity?.code ?? "").trim();
+            if (previousCode && nextCode) {
+                nextCodeByPreviousCode.set(previousCode, nextCode);
+            }
+        });
+
+        return regeneratedActivities.map((activity: any) => {
+            const activityId = String(getActivityId(activity) ?? "");
+            const original = originalById.get(activityId) ?? activity;
+            const remappedPrerequisites = getPrerequisiteCodes(original).map(
+                (prerequisiteCode) => nextCodeByPreviousCode.get(prerequisiteCode) ?? prerequisiteCode
+            );
+
+            return setActivityPrerequisites(activity, remappedPrerequisites, {
+                manual: !!original?.prerequisiteTouched,
+            });
+        });
+    };
+
+    const isDuplicateModuleCode = (
+        code: string,
+        orgId: any,
+        excludeId?: number | null,
+    ) => {
+        const target = normalizeModuleCode(code);
+        return allModules.some((m: any) =>
+            normalizeModuleCode(m.parentModuleCode ?? m.moduleCode ?? "") === target &&
+            m.orgId === orgId &&
+            (excludeId != null ? m.id !== excludeId : true)
+        );
+    };
+
+    const getModuleNameValidationError = ({
+        name,
+        mineType,
+        orgId,
+        excludeId,
+    }: {
+        name: string;
+        mineType: string;
+        orgId: any;
+        excludeId?: number | null;
+    }) => {
+        const trimmedName = normalizeModuleName(name);
+        if (!trimmedName) return "Module name is required";
+        if (mineType && isDuplicateModuleName(trimmedName, mineType, orgId, excludeId)) {
+            return "Module name already exists";
+        }
+        return "";
+    };
+
+    const getModuleCodeValidationError = ({
+        code,
+        orgId,
+        excludeId,
+    }: {
+        code: string;
+        orgId: any;
+        excludeId?: number | null;
+    }) => {
+        const trimmedCode = normalizeModuleCode(code);
+        if (!trimmedCode) return "Module code is required";
+        if (isDuplicateModuleCode(trimmedCode, orgId, excludeId)) {
+            return "Module code already exists";
+        }
+        return "";
+    };
+
+    const validateModuleIdentity = ({
+        name,
+        code,
+        mineType,
+        excludeId,
+    }: {
+        name: string;
+        code: string;
+        mineType: string;
+        excludeId?: number | null;
+    }) => {
+        const nextNameError = getModuleNameValidationError({
+            name,
+            mineType,
+            orgId: currentUser?.orgId ?? null,
+            excludeId,
+        });
+        const nextCodeError = getModuleCodeValidationError({
+            code,
+            orgId: currentUser?.orgId ?? null,
+            excludeId,
+        });
+
+        setModuleNameError(nextNameError);
+        setModuleCodeError(nextCodeError);
+
+        return { nextNameError, nextCodeError };
+    };
+
+    const handleModuleIdentityChange = (field: "moduleName" | "parentModuleCode", value: string) => {
+        if (field === "moduleName") {
+            const nextName = normalizeModuleName(value);
+            validateModuleIdentity({
+                name: nextName,
+                code: moduleData?.parentModuleCode ?? "",
+                mineType: moduleData?.mineType ?? "",
+                excludeId: moduleData?.id,
+            });
+            setModuleData((prev: any) => ({ ...prev, moduleName: nextName }));
+            return;
+        }
+
+        const nextCode = normalizeModuleCode(value);
+        validateModuleIdentity({
+            name: moduleData?.moduleName ?? "",
+            code: nextCode,
+            mineType: moduleData?.mineType ?? "",
+            excludeId: moduleData?.id,
+        });
+        setModuleData((prev: any) => ({
+            ...prev,
+            parentModuleCode: nextCode,
+            activities: nextCode ? remapActivitiesForModuleCode(nextCode, prev.activities || []) : prev.activities || [],
+        }));
     };
 
     const handleActivityEdit = (activityId: any, field: any, value: any) => {
@@ -529,15 +699,12 @@ const setActivitiesWithRecalc = (activities: any[]) => {
     };
 
     const handleModulePlus = () => {
-        if (moduleNameError) {
-            notify.error("Module name already present");
-            return;
-        }
-
-        const intendedName =
-            (newModelName || moduleData.moduleName || "").trim();
+        const intendedName = normalizeModuleName(newModelName || moduleData.moduleName || "");
         const intendedType =
             selectedOption || moduleData.mineType || "";
+        const intendedCode = normalizeModuleCode(
+            moduleCodeName || (intendedName ? getGeneratedModuleCode(intendedName) : "")
+        );
 
         if (!intendedName || !intendedType) {
             notify.warning("Missing Required Fields");
@@ -551,14 +718,13 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             }
         }
 
-        const dup = isDuplicateModuleName(
-            intendedName,
-            intendedType,
-            currentUser?.orgId ?? null
-        );
-        if (dup) {
-            setModuleNameError("Module name already exists");
-            notify.error("Module name already present");
+        const { nextNameError, nextCodeError } = validateModuleIdentity({
+            name: intendedName,
+            code: intendedCode,
+            mineType: intendedType,
+        });
+        if (nextNameError || nextCodeError) {
+            notify.error(nextNameError || nextCodeError);
             return;
         }
 
@@ -570,13 +736,11 @@ const setActivitiesWithRecalc = (activities: any[]) => {
 
         const nextModuleData = {
             guiId: generatedId,
-            parentModuleCode: moduleCodeName
-                ? moduleCodeName
-                : getGeneratedModuleCode(newModelName),
-            moduleName: newModelName,
+            parentModuleCode: intendedCode,
+            moduleName: intendedName,
             level: "L1",
             mineType: selectedOption,
-            activities: regenerateCodes(moduleCodeName ? moduleCodeName : getGeneratedModuleCode(newModelName), clonedActivities),
+            activities: remapActivitiesForModuleCode(intendedCode, clonedActivities),
             userGuiId: currentUser?.guiId,
             orgId: currentUser?.orgId,
             createdAt: new Date().toISOString(),
@@ -599,6 +763,8 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         setSelectedImportModule(null);
         setModuleCodeName("");
         setIsModuleCodeManuallyEdited(false);
+        setModuleNameError("");
+        setModuleCodeError("");
         setModuleData({});
         setSelectedRow(null);
         setSelectedActivityRow(null);
@@ -1154,9 +1320,37 @@ const setActivitiesWithRecalc = (activities: any[]) => {
             normalize(m.moduleName) === target &&
             m.mineType === mineType &&
             m.orgId === orgId &&
-            (excludeId ? m.id !== excludeId : true)
+            (excludeId != null ? m.id !== excludeId : true)
         );
     };
+
+    useEffect(() => {
+        if (!openPopup) return;
+
+        const effectiveName = normalizeModuleName(newModelName || moduleData?.moduleName || "");
+        const effectiveType = selectedOption || moduleData?.mineType || "";
+        const effectiveCode = normalizeModuleCode(
+            moduleCodeName || (effectiveName ? getGeneratedModuleCode(effectiveName) : "")
+        );
+
+        setModuleNameError(
+            effectiveName
+                ? getModuleNameValidationError({
+                    name: effectiveName,
+                    mineType: effectiveType,
+                    orgId: currentUser?.orgId ?? null,
+                })
+                : ""
+        );
+        setModuleCodeError(
+            effectiveCode
+                ? getModuleCodeValidationError({
+                    code: effectiveCode,
+                    orgId: currentUser?.orgId ?? null,
+                })
+                : ""
+        );
+    }, [openPopup, newModelName, selectedOption, moduleCodeName, moduleData?.mineType, moduleData?.moduleName, currentUser?.orgId, allModules]);
 
     const [openBulkImport, setOpenBulkImport] = useState(false);
     const [bulkJson, setBulkJson] = useState("");
@@ -1599,45 +1793,82 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                 </TableHead>
 
                                 <TableBody>
-                                    <TableRow
-                                        hover
-                                        selected={selectedRow === moduleData}
-                                        onClick={() => {
-                                            if (moduleData.activities.length === 0 && moduleData.moduleName) {
+                                    {hasActiveModule && (
+                                        <TableRow
+                                            hover
+                                            className={`module-parent-row${selectedRow === moduleData ? " is-selected" : ""}`}
+                                            selected={selectedRow === moduleData}
+                                            onClick={() => {
                                                 setSelectedRow(moduleData);
-                                            }
-                                        }}
-                                        sx={{
-                                            '&:last-child td, &:last-child th': { border: 0 },
-                                            cursor: moduleData.activities?.length == 0 ? 'pointer' : 'none',
-                                        }}
-                                    >
-
-                                        <TableCell
-                                            suppressContentEditableWarning
-                                            onBlur={(e) => handleEdit('parentModuleCode', e.target.innerText)}
-                                            sx={{ cursor: 'text', outline: 'none', padding: '10px' }}
-                                        >{moduleData.parentModuleCode}</TableCell>
-                                        <TableCell
-                                            suppressContentEditableWarning
-                                            onBlur={(e) => handleEdit('moduleName', e.target.innerText)}
-                                            sx={{ cursor: 'text', outline: 'none', padding: '10px' }}
+                                                setSelectedActivityRow(null);
+                                            }}
+                                            sx={{
+                                                '&:last-child td, &:last-child th': { border: 0 },
+                                                cursor: 'pointer',
+                                            }}
                                         >
-                                            {moduleData.moduleName}
-                                        </TableCell>
-                                        <TableCell sx={{ padding: '10px', color: '#808080' }}>
-                                            {moduleData.duration}
-                                        </TableCell>
-                                        <TableCell sx={{ padding: '10px', color: '#808080' }}>
-                                            {formatPrerequisiteCodes(moduleData)}
-                                        </TableCell>
 
-                                        <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{moduleData.level}</TableCell>
-                                    </TableRow>
+                                            <TableCell
+                                                sx={{
+                                                    padding: '10px',
+                                                    minWidth: 180,
+                                                    borderColor: moduleCodeError ? '#ff4d4f' : undefined,
+                                                    boxShadow: moduleCodeError ? 'inset 0 0 0 1px #ff4d4f' : undefined,
+                                                }}
+                                            >
+                                                <div
+                                                    className="module-parent-code"
+                                                    contentEditable
+                                                    suppressContentEditableWarning
+                                                    onBlur={(e) => handleModuleIdentityChange('parentModuleCode', e.currentTarget.innerText)}
+                                                >
+                                                    {moduleData.parentModuleCode}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell
+                                                sx={{
+                                                    padding: '10px',
+                                                    minWidth: 240,
+                                                    borderColor: moduleNameError ? '#ff4d4f' : undefined,
+                                                    boxShadow: moduleNameError ? 'inset 0 0 0 1px #ff4d4f' : undefined,
+                                                }}
+                                            >
+                                                <div className="module-parent-name-wrap">
+                                                    <span className="module-parent-badge" contentEditable={false}>
+                                                        Module
+                                                    </span>
+                                                    <div
+                                                        className="module-parent-name"
+                                                        contentEditable
+                                                        suppressContentEditableWarning
+                                                        onBlur={(e) => handleModuleIdentityChange('moduleName', e.currentTarget.innerText)}
+                                                    >
+                                                        {moduleData.moduleName}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell sx={{ padding: '10px', color: '#808080' }}>
+                                                {moduleData.duration}
+                                            </TableCell>
+                                            <TableCell sx={{ padding: '10px', color: '#808080' }}>
+                                                {formatPrerequisiteCodes(moduleData)}
+                                            </TableCell>
+
+                                            <TableCell sx={{ padding: '10px', cursor: "pointer" }}>{moduleData.level}</TableCell>
+                                        </TableRow>
+                                    )}
+                                    {hasActiveModule && (moduleCodeError || moduleNameError) && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} sx={{ padding: '6px 10px', color: '#ff4d4f', fontSize: '12px' }}>
+                                                {moduleCodeError || moduleNameError}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                     {Array.isArray(moduleData.activities) &&
                                         moduleData.activities.map((activity: any) => (
                                             <TableRow
                                                 hover
+                                                className={getActivityId(selectedRow) === getActivityId(activity) ? "module-activity-row is-selected" : "module-activity-row"}
                                                 key={getActivityId(activity) || activity.code}
                                                 selected={getActivityId(selectedRow) === getActivityId(activity)}
                                                 onClick={() => {
@@ -2001,14 +2232,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                 placeholder="Enter module name"
                                                 value={newModelName}
                                                 onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setNewModelName(val);
-                                                    const dup = isDuplicateModuleName(
-                                                        val,
-                                                        selectedOption || moduleData.mineType || "",
-                                                        currentUser?.orgId ?? null
-                                                    );
-                                                    setModuleNameError(dup ? "Module name already exists" : "");
+                                                    setNewModelName(e.target.value);
                                                 }}
                                                 status={moduleNameError ? "error" : ""}
                                             />
@@ -2030,11 +2254,17 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                 placeholder="Enter module code"
                                                 value={moduleCodeName}
                                                 onChange={(e) => {
-                                                    const nextValue = e.target.value.toUpperCase();
+                                                    const nextValue = normalizeModuleCode(e.target.value);
                                                     setModuleCodeName(nextValue);
                                                     setIsModuleCodeManuallyEdited(nextValue.trim().length > 0);
                                                 }}
+                                                status={moduleCodeError ? "error" : ""}
                                             />
+                                            {moduleCodeError && (
+                                                <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>
+                                                    {moduleCodeError}
+                                                </div>
+                                            )}
                                         </Col>
                                     </Row>
                                 </Col>
