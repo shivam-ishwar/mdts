@@ -1,0 +1,262 @@
+/* Project Visuals — vertical marquee showcase (register new project) */
+
+.pvs-shell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 14px;
+    border-radius: var(--radius-lg);
+    background:
+        radial-gradient(circle at top right, rgba(52, 211, 153, 0.1), transparent 38%),
+        linear-gradient(165deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.72));
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow:
+        0 20px 44px rgba(15, 23, 42, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.65);
+    overflow: hidden;
+}
+
+.pvs-shell--empty {
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    border: 1px dashed rgba(148, 163, 184, 0.34);
+}
+
+.pvs-shell--empty h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: var(--text-primary);
+}
+
+.pvs-shell--empty p {
+    margin: 0;
+    max-width: 42ch;
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-secondary);
+}
+
+.pvs-header {
+    flex-shrink: 0;
+    padding: 2px 2px 12px;
+}
+
+.pvs-header-note {
+    margin: 8px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.pvs-viewport {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(
+        180deg,
+        transparent 0%,
+        #000 8%,
+        #000 92%,
+        transparent 100%
+    );
+    mask-image: linear-gradient(180deg, transparent 0%, #000 8%, #000 92%, transparent 100%);
+}
+
+.pvs-track {
+    display: flex;
+    flex-direction: column;
+    will-change: transform;
+}
+
+.pvs-track--animated {
+    animation: pvs-marquee var(--pvs-duration, 32s) linear infinite;
+}
+
+.pvs-viewport:hover .pvs-track--animated {
+    animation-play-state: paused;
+}
+
+@keyframes pvs-marquee {
+    from {
+        transform: translateY(0);
+    }
+    to {
+        transform: translateY(calc(-1 * var(--pvs-loop-height, 0px)));
+    }
+}
+
+.pvs-track-set {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 14px;
+}
+
+.pvs-card {
+    position: relative;
+    width: 100%;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #0f172a;
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+    cursor: default;
+}
+
+.pvs-card--h-sm {
+    min-height: 196px;
+}
+
+.pvs-card--h-md {
+    min-height: 232px;
+}
+
+.pvs-card--h-lg {
+    min-height: 268px;
+}
+
+.pvs-card-media {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
+}
+
+.pvs-card-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform-origin: center center;
+}
+
+.pvs-card-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.42) 42%, rgba(15, 23, 42, 0.88) 100%),
+        radial-gradient(circle at top right, rgba(52, 211, 153, 0.2), transparent 36%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pvs-card-copy {
+    position: absolute;
+    inset: auto 0 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 16px 18px 18px;
+    color: #f8fafc;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.pvs-card-copy h3 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 900;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+}
+
+.pvs-card-copy p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: rgba(248, 250, 252, 0.9);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Mobile — horizontal swipe carousel */
+.pvs-shell--mobile {
+    min-height: 360px;
+}
+
+.pvs-mobile-viewport {
+    flex: 1;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(31, 122, 99, 0.35) rgba(15, 23, 42, 0.08);
+}
+
+.pvs-mobile-viewport::-webkit-scrollbar {
+    height: 8px;
+}
+
+.pvs-mobile-viewport::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.06);
+    border-radius: 999px;
+}
+
+.pvs-mobile-viewport::-webkit-scrollbar-thumb {
+    background: linear-gradient(90deg, rgba(52, 211, 153, 0.75), rgba(31, 122, 99, 0.85));
+    border-radius: 999px;
+}
+
+.pvs-mobile-track {
+    display: flex;
+    gap: 14px;
+    width: max-content;
+    padding: 2px 14px 8px;
+}
+
+.pvs-shell--mobile .pvs-card {
+    width: min(78vw, 300px);
+    scroll-snap-align: start;
+}
+
+.pvs-shell--mobile .pvs-card-overlay {
+    opacity: 1;
+}
+
+.pvs-shell--mobile .pvs-card-copy {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+    .pvs-shell {
+        padding: 12px;
+    }
+
+    .pvs-card--h-sm {
+        min-height: 184px;
+    }
+
+    .pvs-card--h-md {
+        min-height: 216px;
+    }
+
+    .pvs-card--h-lg {
+        min-height: 248px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pvs-track {
+        transform: none !important;
+    }
+
+    .pvs-viewport {
+        overflow-y: auto;
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}

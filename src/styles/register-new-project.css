@@ -32,6 +32,18 @@
 
 .registration-right {
     height: 100%;
+    min-height: 0;
+}
+
+.registration-right .image-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.registration-right .pvs-shell {
+    flex: 1;
+    min-height: 0;
 }
 
 .page-heading-module-library {
