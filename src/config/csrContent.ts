@@ -17,6 +17,8 @@ export type CsrContentConfig = {
   homeHeroImage: string;
   homeHeroQuote: string;
   homeHeroBody: string;
+  homeHeroVideo?: string;
+  homeHeroVideoPoster?: string;
   homeVisualHeading: string;
   homeVisualSubheading: string;
   homeVisualItems: CsrVisualItem[];
@@ -28,6 +30,8 @@ export const defaultCsrContentConfig: CsrContentConfig = {
   homeHeroQuote: '"What gets delayed gets costly. What gets tracked gets delivered."',
   homeHeroBody:
     "MDTS gives the organization a sharper operating window with real-time visibility, structured ownership, and execution discipline that keeps every milestone moving.",
+  homeHeroVideo: "",
+  homeHeroVideoPoster: "",
   homeVisualHeading: "Image-led workspace moments",
   homeVisualSubheading:
     "Different image treatments make the homepage feel more alive while keeping the visual language tied to mining, delivery, and execution.",
@@ -128,6 +132,8 @@ export const normalizeCsrContentConfig = (value: any): CsrContentConfig => {
     homeHeroImage: String(config.homeHeroImage || defaultCsrContentConfig.homeHeroImage).trim() || defaultCsrContentConfig.homeHeroImage,
     homeHeroQuote: String(config.homeHeroQuote || defaultCsrContentConfig.homeHeroQuote).trim() || defaultCsrContentConfig.homeHeroQuote,
     homeHeroBody: String(config.homeHeroBody || defaultCsrContentConfig.homeHeroBody).trim() || defaultCsrContentConfig.homeHeroBody,
+    homeHeroVideo: String(config.homeHeroVideo || "").trim(),
+    homeHeroVideoPoster: String(config.homeHeroVideoPoster || "").trim(),
     homeVisualHeading:
       String(config.homeVisualHeading || defaultCsrContentConfig.homeVisualHeading).trim() || defaultCsrContentConfig.homeVisualHeading,
     homeVisualSubheading:

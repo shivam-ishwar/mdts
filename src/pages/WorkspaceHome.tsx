@@ -6,17 +6,14 @@ import {
 import { useNavigate } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Button } from "antd";
-import {
-    BookOutlined,
-    ProjectOutlined,
-    ArrowRightOutlined
-} from "@ant-design/icons";
+import { ArrowRightOutlined } from "@ant-design/icons";
 import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { db } from "../Utils/dataStorege";
 import { userStore } from "../Utils/UserStore";
 import { getLatestProjectModules } from "../Utils/projectTimeline";
 import { flattenActivities, getPrerequisiteCodes } from "../Utils/prerequisites";
 import { defaultCsrContentConfig, normalizeCsrContentConfig, type CsrContentConfig } from "../config/csrContent";
+import { WorkspaceHeroVideo } from "../Components/workspace-home/WorkspaceHeroVideo";
 import TimelineTreeView, {
     type TimelineTreeActivity,
     type TimelineTreeModule,
@@ -537,12 +534,6 @@ const WorkspaceHome = () => {
         index,
         visual,
     }));
-    const heroHighlights = [
-        { label: "Active projects", value: String(summary.projectCount) },
-        { label: "Timeline adherence", value: `${summary.overallTimelineAdherence}%` },
-        { label: "Completed activities", value: String(summary.completedActivities) },
-    ];
-
     useEffect(() => {
         setActiveGalleryIndex((prev) => {
             if (homeVisuals.length === 0) return 0;
@@ -571,9 +562,6 @@ const WorkspaceHome = () => {
                         transition={{ duration: 0.45, ease: easeSmooth }}
                     >
                         <div className="wh-hero-topbar-copy">
-                            <p className="wh-greeting wh-greeting--topbar">
-                                <span className="wh-greeting-welcome">Welcome back</span>
-                            </p>
                             <div className="wh-topbar-main">
                                 <div className="wh-topbar-heading">
                                     <h1 className="wh-topbar-title">
@@ -614,38 +602,13 @@ const WorkspaceHome = () => {
                                         ? csrContent.homeHeroBody.replace("the organization", organizationName)
                                         : csrContent.homeHeroBody}
                                 </p>
-                                <div className="wh-hero-actions wh-hero-actions--spotlight">
-                                    <Button
-                                        type="primary"
-                                        size="large"
-                                        className="wh-btn-primary wh-btn-primary--banner"
-                                        onClick={() => navigate("/project")}
-                                        icon={<ProjectOutlined />}
-                                    >
-                                        Continue to projects
-                                    </Button>
-                                    <Button
-                                        size="large"
-                                        className="wh-btn-ghost wh-btn-ghost--banner"
-                                        onClick={() => navigate("/knowledge-center")}
-                                        icon={<BookOutlined />}
-                                    >
-                                        Knowledge Center
-                                    </Button>
-                                </div>
                             </div>
-                            <div className="wh-hero-spotlight-art" aria-hidden>
-                                <div className="wh-hero-metrics-card">
-                                    <span className="wh-hero-metrics-label">Live pulse</span>
-                                    <div className="wh-hero-metrics-list">
-                                        {heroHighlights.map((item) => (
-                                            <div key={item.label} className="wh-hero-metric-item">
-                                                <strong>{item.value}</strong>
-                                                <span>{item.label}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
+                            <div className="wh-hero-spotlight-art">
+                                <WorkspaceHeroVideo
+                                    videoUrl={csrContent.homeHeroVideo}
+                                    posterUrl={csrContent.homeHeroVideoPoster}
+                                    title={`${organizationName} briefing`}
+                                />
                             </div>
                         </div>
                     </motion.div>
