@@ -33,14 +33,14 @@ export function WorkspaceHeroVideo({
 
     return (
         <div className="wh-hero-video wh-hero-video--placeholder" aria-label="Video placeholder">
-            <span className="wh-hero-video-label">Briefing</span>
+            {/* <span className="wh-hero-video-label">Briefing</span> */}
             <div className="wh-hero-video-placeholder-inner">
                 <span className="wh-hero-video-play" aria-hidden>
                     <PlayCircleOutlined />
                 </span>
-                <p className="wh-hero-video-placeholder-title">{title}</p>
+                {/* <p className="wh-hero-video-placeholder-title">{title}</p> */}
                 <p className="wh-hero-video-placeholder-copy">
-                    Executive overview video will appear here once configured.
+                    {/* Executive overview video will appear here once configured. */}
                 </p>
             </div>
         </div>

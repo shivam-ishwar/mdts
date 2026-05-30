@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  RightOutlined,
-} from "@ant-design/icons";
+import { RightOutlined } from "@ant-design/icons";
+import { Select } from "antd";
 import { timelineHierarchyMock } from "../config/timelineHierarchyMock";
 
 export type TimelineStatusTone = "completed" | "inprogress" | "yettostart";
@@ -47,11 +46,6 @@ type ColumnItemBase = {
   status: TimelineStatusTone;
 };
 
-type ProjectColumnItem = ColumnItemBase & {
-  kind: "project";
-  meta: string;
-};
-
 type ModuleColumnItem = ColumnItemBase & {
   kind: "module";
   meta: string;
@@ -68,7 +62,7 @@ type ChildColumnItem = ColumnItemBase & {
   code?: string;
 };
 
-type ColumnItem = ProjectColumnItem | ModuleColumnItem | ActivityColumnItem | ChildColumnItem;
+type ColumnItem = ModuleColumnItem | ActivityColumnItem | ChildColumnItem;
 
 const easeSmooth = [0.16, 1, 0.3, 1] as const;
 const columnListVariants = {
@@ -139,6 +133,7 @@ function HierarchyColumn({
   selectedId,
   onSelect,
   columnClassName,
+  columnLabel,
   prefersReducedMotion,
   emptyTitle,
   emptyText,
@@ -147,6 +142,7 @@ function HierarchyColumn({
   selectedId: string | null;
   onSelect: (id: string) => void;
   columnClassName: string;
+  columnLabel?: string;
   prefersReducedMotion?: boolean;
   emptyTitle?: string;
   emptyText?: string;
@@ -158,6 +154,12 @@ function HierarchyColumn({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32, ease: easeSmooth }}
     >
+      {columnLabel ? (
+        <div className="ttv-cascade-column-head">
+          <span className="ttv-cascade-column-label">{columnLabel}</span>
+        </div>
+      ) : null}
+
       {!items.length ? (
         <div className="ttv-cascade-empty">
           <strong>{emptyTitle || "No content"}</strong>
@@ -304,13 +306,14 @@ const TimelineTreeView = ({ projects, prefersReducedMotion }: TimelineTreeViewPr
     });
   }, [rootDependencyItems]);
 
-  const projectItems: ProjectColumnItem[] = sourceProjects.map((project) => ({
-    id: project.id,
-    kind: "project",
-    name: project.name,
-    status: project.status,
-    meta: `${project.moduleCount} modules`,
-  }));
+  const projectSelectOptions = useMemo(
+    () =>
+      sourceProjects.map((project) => ({
+        value: project.id,
+        label: project.name,
+      })),
+    [sourceProjects]
+  );
 
   const moduleItems: ModuleColumnItem[] = (selectedProject?.modules ?? []).map((module) => ({
     id: module.id,
@@ -359,90 +362,97 @@ const TimelineTreeView = ({ projects, prefersReducedMotion }: TimelineTreeViewPr
     return columns;
   }, [rootDependencyItems, selectedDependencyPath]);
 
+  const handleProjectChange = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setSelectedModuleId(null);
+    setSelectedActivityId(null);
+    setSelectedDependencyPath([]);
+  };
+
   return (
     <section className="wh-timeline-tree wh-timeline-tree--cascade" aria-labelledby="wh-timeline-tree-heading">
       <div className="ttv-cascade-shell">
-        <div className="wh-section-head wh-section-head--timeline">
-          <span className="wh-section-eyebrow">Hierarchy Explorer</span>
-          <h2 id="wh-timeline-tree-heading" className="wh-section-title wh-section-title--timeline">
-            Project Tree View
-          </h2>
-          <p className="wh-section-sub wh-section-sub--timeline">
-            Follow the project structure from portfolio level down to activity dependencies in one continuous view.
-          </p>
+        <div className="ttv-cascade-header">
+          <div className="ttv-cascade-header-copy">
+            <h2 id="wh-timeline-tree-heading" className="wh-section-title wh-section-title--timeline">
+              Time line Tree
+            </h2>
+            <p className="wh-section-sub wh-section-sub--timeline">
+              Drill into modules and activities for the selected project, then follow dependency chains in sequence.
+            </p>
+          </div>
+          <div className="ttv-cascade-project-field">
+            <label className="ttv-cascade-project-label" htmlFor="ttv-project-select">
+              Project
+            </label>
+            <Select
+              id="ttv-project-select"
+              className="ttv-cascade-project-select"
+              size="large"
+              showSearch
+              optionFilterProp="label"
+              placeholder="Select a project"
+              value={selectedProjectId ?? undefined}
+              options={projectSelectOptions}
+              onChange={handleProjectChange}
+              disabled={!projectSelectOptions.length}
+              popupMatchSelectWidth={false}
+            />
+          </div>
         </div>
-
-        <div className="ttv-cascade-grid" aria-hidden />
 
         <div className="ttv-cascade-scroll">
         <div className="ttv-cascade-columns">
-          <HierarchyColumn
-            items={projectItems}
-            selectedId={selectedProjectId}
-            onSelect={(id) => {
-              setSelectedProjectId(id);
-              setSelectedModuleId(null);
-              setSelectedActivityId(null);
-              setSelectedDependencyPath([]);
-            }}
-            columnClassName="ttv-cascade-column--project"
-            prefersReducedMotion={prefersReducedMotion}
-            emptyTitle="No projects"
-            emptyText="No project data is available right now."
-          />
+          {!selectedProject ? (
+            <div className="ttv-cascade-empty ttv-cascade-empty--page">
+              <strong>No project selected</strong>
+              <p>Choose a project from the dropdown to explore its module and activity timeline.</p>
+            </div>
+          ) : (
+            <>
+              <HierarchyColumn
+                items={moduleItems}
+                selectedId={selectedModuleId}
+                onSelect={(id) => {
+                  setSelectedModuleId(id);
+                  setSelectedActivityId(null);
+                  setSelectedDependencyPath([]);
+                }}
+                columnClassName="ttv-cascade-column--module"
+                columnLabel="Modules"
+                prefersReducedMotion={prefersReducedMotion}
+                emptyTitle="No modules"
+                emptyText="This project does not have any modules yet."
+              />
 
-          <AnimatePresence mode="wait" initial={false}>
-            {selectedProject ? (
-              <motion.div
-                key={`module-${selectedProject.id}`}
-                initial={prefersReducedMotion ? false : { opacity: 0, x: 24 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 12 }}
-                transition={{ duration: 0.28, ease: easeSmooth }}
-              >
-                <HierarchyColumn
-                  items={moduleItems}
-                  selectedId={selectedModuleId}
-                  onSelect={(id) => {
-                    setSelectedModuleId(id);
-                    setSelectedActivityId(null);
-                    setSelectedDependencyPath([]);
-                  }}
-                  columnClassName="ttv-cascade-column--module"
-                  prefersReducedMotion={prefersReducedMotion}
-                  emptyTitle="No modules"
-                  emptyText="This project does not have any modules yet."
-                />
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+              <AnimatePresence mode="wait" initial={false}>
+                {selectedModule ? (
+                  <motion.div
+                    key={`activity-${selectedProject.id}-${selectedModule.id}`}
+                    className="ttv-cascade-column-wrap"
+                    initial={prefersReducedMotion ? false : { opacity: 0, x: 24 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 12 }}
+                    transition={{ duration: 0.28, ease: easeSmooth }}
+                  >
+                    <HierarchyColumn
+                      items={activityItems}
+                      selectedId={selectedActivityId}
+                      onSelect={(id) => {
+                        setSelectedActivityId(id);
+                        setSelectedDependencyPath([]);
+                      }}
+                      columnClassName="ttv-cascade-column--activity"
+                      columnLabel="Activities"
+                      prefersReducedMotion={prefersReducedMotion}
+                      emptyTitle="No activities"
+                      emptyText="This module does not have any activities yet."
+                    />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
 
-          <AnimatePresence mode="wait" initial={false}>
-            {selectedModule ? (
-              <motion.div
-                key={`activity-${selectedProject?.id ?? "project"}-${selectedModule.id}`}
-                initial={prefersReducedMotion ? false : { opacity: 0, x: 24 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, x: 12 }}
-                transition={{ duration: 0.28, ease: easeSmooth }}
-              >
-                <HierarchyColumn
-                  items={activityItems}
-                  selectedId={selectedActivityId}
-                  onSelect={(id) => {
-                    setSelectedActivityId(id);
-                    setSelectedDependencyPath([]);
-                  }}
-                  columnClassName="ttv-cascade-column--activity"
-                  prefersReducedMotion={prefersReducedMotion}
-                  emptyTitle="No activities"
-                  emptyText="This module does not have any activities yet."
-                />
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
-          <AnimatePresence initial={false}>
+              <AnimatePresence initial={false}>
             {selectedActivity && dependencyColumns.length === 0 ? (
               <motion.section
                 key={`child-empty-${selectedActivity.id}`}
@@ -489,13 +499,16 @@ const TimelineTreeView = ({ projects, prefersReducedMotion }: TimelineTreeViewPr
                     });
                   }}
                   columnClassName={index === 0 ? "ttv-cascade-column--child" : "ttv-cascade-column--nested"}
+                  columnLabel={index === 0 ? "Dependencies" : undefined}
                   prefersReducedMotion={prefersReducedMotion}
                   emptyTitle="No dependents"
                   emptyText="This activity does not have dependent items."
                 />
               </motion.div>
             ))}
-          </AnimatePresence>
+              </AnimatePresence>
+            </>
+          )}
         </div>
         </div>
       </div>

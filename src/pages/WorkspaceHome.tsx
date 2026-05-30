@@ -790,7 +790,7 @@ const WorkspaceHome = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="wh-briefing-copy">{a.excerpt}</p>
+                                        {/* <p className="wh-briefing-copy">{a.excerpt}</p> */}
                                     </li>
                                 ))}
                             </ul>
