@@ -11,7 +11,7 @@ import { db } from "../Utils/dataStorege.ts";
 import { getCurrentUserId } from '../Utils/moduleStorage';
 import { RollbackOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
-import { regenerateCodes, indentActivity, outdentActivity, createActivity } from "../Utils/activityHierarchy";
+import { regenerateCodes, indentActivity, outdentActivity, createActivity, canIndentActivity } from "../Utils/activityHierarchy";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { getCurrentUser } from "../Utils/moduleStorage";
 import { ToastContainer } from "react-toastify";
@@ -522,6 +522,7 @@ const setActivitiesWithRecalc = (activities: any[]) => {
         if (!selectedRow || isModuleRow(selectedRow)) return;
         const selectedId = getActivityId(selectedRow);
         if (!selectedId) return;
+        if (!canIndentActivity(moduleData.activities || [], selectedId)) return;
         const updatedActivities = indentActivity(moduleData.activities || [], moduleData.parentModuleCode, selectedId);
         setActivitiesWithRecalc(updatedActivities);
         const nextSelected = updatedActivities.find((a: any) => getActivityId(a) === selectedId) || selectedRow;
@@ -1637,7 +1638,13 @@ const setActivitiesWithRecalc = (activities: any[]) => {
                                                     icon={<ArrowUpOutlined />}
                                                     className="icon-button orange"
                                                     onClick={increaseLevel}
-                                                    disabled={!selectedActivityRow}
+                                                    disabled={
+                                                        !selectedActivityRow ||
+                                                        !canIndentActivity(
+                                                            moduleData.activities || [],
+                                                            getActivityId(selectedActivityRow) ?? ""
+                                                        )
+                                                    }
                                                 />
                                             </Tooltip>
                                         </Col>

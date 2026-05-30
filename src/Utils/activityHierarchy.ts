@@ -8,6 +8,10 @@ type ActivityItem = {
   duration?: number | string;
   level?: string;
   levelIndex?: number;
+  /** Level when the activity entered the list; used to enforce one indent per activity. */
+  baseLevelIndex?: number;
+  /** True after the user has increased level once; outdent does not reset this. */
+  hasBeenIndented?: boolean;
   parentId?: string | null;
   prerequisite?: string | null;
   prerequisite_activity_code?: string | null;
@@ -17,20 +21,49 @@ type ActivityItem = {
 const getActivityId = (activity: ActivityItem) =>
   activity?.id ?? activity?.guicode ?? activity?.code;
 
-const MAX_LEVEL = 2;
-
 const clampLevel = (level: any) => {
   const n = Number(level || 1);
   if (!Number.isFinite(n)) return 1;
-  return Math.max(1, Math.min(MAX_LEVEL, Math.trunc(n)));
+  return Math.max(1, Math.trunc(n));
+};
+
+const ensureArrayLength = <T>(arr: T[], length: number, fill: T) => {
+  while (arr.length < length) {
+    arr.push(fill);
+  }
+};
+
+const getBaseLevelIndex = (activity: ActivityItem) =>
+  clampLevel(
+    activity.baseLevelIndex ??
+      activity.levelIndex ??
+      String(activity.level || "").replace("L", "") ??
+      1
+  );
+
+const hasUsedIndent = (activity: ActivityItem) => {
+  if (activity.hasBeenIndented === true) return true;
+  if (activity.hasBeenIndented === false) return false;
+  const levelIndex = clampLevel(activity.levelIndex || String(activity.level || "").replace("L", "") || 1);
+  return levelIndex > getBaseLevelIndex(activity);
 };
 
 const normalizeActivities = (activities: ActivityItem[] = []) =>
-  (activities || []).map((activity) => ({
-    ...activity,
-    guicode: activity.guicode || uuidv4(),
-    levelIndex: clampLevel(activity.levelIndex || String(activity.level || "").replace("L", "") || 1),
-  }));
+  (activities || []).map((activity) => {
+    const levelIndex = clampLevel(
+      activity.levelIndex || String(activity.level || "").replace("L", "") || 1
+    );
+    const baseLevelIndex = getBaseLevelIndex({ ...activity, levelIndex });
+    const hasBeenIndented = hasUsedIndent({ ...activity, levelIndex, baseLevelIndex });
+
+    return {
+      ...activity,
+      guicode: activity.guicode || uuidv4(),
+      levelIndex,
+      baseLevelIndex,
+      hasBeenIndented,
+    };
+  });
 
 const findSubtreeEndIndex = (activities: ActivityItem[], index: number) => {
   const baseLevel = clampLevel(activities[index]?.levelIndex || 1);
@@ -43,26 +76,19 @@ const findSubtreeEndIndex = (activities: ActivityItem[], index: number) => {
   return end;
 };
 
-const deriveParentIdsAndCodes = (parentModuleCode: string, activities: ActivityItem[] = []) => {
+/**
+ * Pass 1: resolve parentId from flat list order + levelIndex.
+ * Parent is the nearest preceding activity exactly one level above.
+ */
+const resolveParentIds = (activities: ActivityItem[] = []) => {
   const list = normalizeActivities(activities);
-  const counters = [0, 0, 0, 0];
-  const lastAtLevel: Array<string | null> = [null, null, null, null];
+  const lastAtLevel: Array<string | null> = [];
 
   return list.map((activity) => {
     const levelIndex = clampLevel(activity.levelIndex || 1);
-
-    counters[levelIndex - 1] += 1;
-    for (let i = levelIndex; i < counters.length; i++) counters[i] = 0;
+    ensureArrayLength(lastAtLevel, levelIndex, null);
 
     for (let i = levelIndex; i < lastAtLevel.length; i++) lastAtLevel[i] = null;
-
-    const segments: string[] = [];
-    for (let i = 0; i < levelIndex; i++) {
-      const value = counters[i] === 0 ? 1 : counters[i];
-      segments.push(String(value * 10));
-    }
-
-    const code = `${parentModuleCode}/${segments.join("/")}`;
 
     let parentId: string | null = null;
     if (levelIndex > 1) {
@@ -74,23 +100,83 @@ const deriveParentIdsAndCodes = (parentModuleCode: string, activities: ActivityI
       }
     }
 
-    const normalized = {
+    const guicode = activity.guicode || uuidv4();
+    lastAtLevel[levelIndex - 1] = guicode;
+
+    return {
       ...activity,
-      guicode: activity.guicode || uuidv4(),
+      guicode,
+      levelIndex,
+      parentId,
+    };
+  });
+};
+
+/**
+ * Pass 2: assign codes from scratch using resolved parent relationships.
+ * Each parent maintains its own child sequence: /10, /20, /30, ...
+ * Codes are never derived from existing code strings.
+ */
+const assignCodesFromHierarchy = (
+  parentModuleCode: string,
+  activities: ActivityItem[] = []
+) => {
+  const childCounters = new Map<string, number>();
+  const codeById = new Map<string, string>();
+
+  return activities.map((activity) => {
+    const id = activity.guicode!;
+    const levelIndex = clampLevel(activity.levelIndex || 1);
+    const parentId = activity.parentId ?? null;
+    let code: string;
+
+    if (levelIndex === 1 || !parentId) {
+      const count = (childCounters.get(parentModuleCode) ?? 0) + 1;
+      childCounters.set(parentModuleCode, count);
+      code = `${parentModuleCode}/${count * 10}`;
+    } else {
+      const parentCode = codeById.get(parentId);
+      const count = (childCounters.get(parentId) ?? 0) + 1;
+      childCounters.set(parentId, count);
+
+      if (!parentCode) {
+        const count = (childCounters.get(parentModuleCode) ?? 0) + 1;
+        childCounters.set(parentModuleCode, count);
+        code = `${parentModuleCode}/${count * 10}`;
+      } else {
+        code = `${parentCode}/${count * 10}`;
+      }
+    }
+
+    codeById.set(id, code);
+
+    return {
+      ...activity,
       levelIndex,
       level: `L${levelIndex}`,
       parentId,
       code,
     };
-
-    lastAtLevel[levelIndex - 1] = normalized.guicode;
-
-    return normalized;
   });
+};
+
+const deriveParentIdsAndCodes = (parentModuleCode: string, activities: ActivityItem[] = []) => {
+  const withParents = resolveParentIds(activities);
+  return assignCodesFromHierarchy(parentModuleCode, withParents);
 };
 
 export const regenerateCodes = (parentModuleCode: string, activities: ActivityItem[] = []) => {
   return deriveParentIdsAndCodes(parentModuleCode, activities);
+};
+
+export const canIndentActivity = (
+  activities: ActivityItem[] = [],
+  selectedId: string
+) => {
+  const list = normalizeActivities(activities);
+  const index = list.findIndex((a) => String(getActivityId(a)) === String(selectedId));
+  if (index <= 0) return false;
+  return !hasUsedIndent(list[index]);
 };
 
 export const indentActivity = (
@@ -102,17 +188,12 @@ export const indentActivity = (
   const index = list.findIndex((a) => String(getActivityId(a)) === String(selectedId));
   if (index <= 0) return regenerateCodes(parentModuleCode, list);
 
-  const previous = list[index - 1];
-  if (!previous) return regenerateCodes(parentModuleCode, list);
-
   const current = list[index];
-  const targetLevel = Math.min(
-    MAX_LEVEL,
-    Math.max(
-      clampLevel(current.levelIndex || 1) + 1,
-      clampLevel(previous.levelIndex || 1) + 1
-    )
-  );
+  if (hasUsedIndent(current)) return regenerateCodes(parentModuleCode, list);
+
+  const currentLevel = clampLevel(current.levelIndex || 1);
+  const targetLevel = currentLevel + 1;
+  const baseLevelIndex = getBaseLevelIndex(current);
 
   const updated = list.map((item, i) =>
     i === index
@@ -120,6 +201,8 @@ export const indentActivity = (
           ...item,
           levelIndex: targetLevel,
           level: `L${targetLevel}`,
+          baseLevelIndex,
+          hasBeenIndented: true,
         }
       : item
   );
@@ -175,10 +258,7 @@ export const createActivity = (
     if (parentIndex >= 0) {
       const end = findSubtreeEndIndex(list, parentIndex);
       insertAt = end + 1;
-      levelIndex = Math.min(
-        MAX_LEVEL,
-        clampLevel(list[parentIndex]?.levelIndex || 1) + 1
-      );
+      levelIndex = clampLevel(list[parentIndex]?.levelIndex || 1) + 1;
     }
   }
 
@@ -189,6 +269,8 @@ export const createActivity = (
     duration: 1,
     levelIndex,
     level: `L${levelIndex}`,
+    baseLevelIndex: levelIndex,
+    hasBeenIndented: false,
     parentId: null,
     prerequisite: null,
     prerequisite_activity_code: null,
