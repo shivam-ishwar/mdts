@@ -4,8 +4,8 @@ import Navbar from "./Navbar";
 const MainLayout = () => {
     return (
         <div className="layout-container">
-            <main className="main-content">
-                <Navbar />
+            <Navbar />
+            <main className="main-content layout-page-scroll">
                 <LandingPage />
             </main>
         </div>

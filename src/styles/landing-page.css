@@ -40,6 +40,31 @@
     transition: top 0.3s ease;
 }
 
+.layout-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.layout-container > .main-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+}
+
+.layout-container > .main-content > .main-content {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.layout-page-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+}
+
 .main-content {
     transition: margin-top 0.3s ease;
 }
