@@ -21,6 +21,8 @@ export function WorkspaceHeroVideo({
                     className="wh-hero-video-player"
                     src={videoUrl}
                     poster={posterUrl}
+                    title={title}
+                    aria-label={title}
                     controls
                     playsInline
                     preload="metadata"

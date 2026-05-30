@@ -3,6 +3,7 @@
     top: 0;
     z-index: 1100;
     flex-shrink: 0;
+    overflow: visible;
     background: var(--color-primary);
     display: flex;
     justify-content: space-between;
@@ -12,6 +13,41 @@
     border-bottom-left-radius: var(--radius-lg);
     border-bottom-right-radius: var(--radius-lg);
     border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* Nav dropdowns — scroll inside panel, do not cover the whole page */
+.nav-dropdown-overlay {
+    z-index: 1200;
+}
+
+.nav-dropdown-overlay .ant-dropdown-menu {
+    max-height: min(380px, calc(100vh - 88px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+    border-radius: 12px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.nav-dropdown-overlay .ant-dropdown-menu-item {
+    min-height: 36px;
+    padding: 8px 14px;
+    font-weight: 600;
+    border-radius: 8px;
+}
+
+.nav-notification-overlay .notification-menu {
+    max-height: min(420px, calc(100vh - 88px));
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-notification-overlay .notification-list {
+    max-height: min(340px, calc(100vh - 160px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .logo-and-text {

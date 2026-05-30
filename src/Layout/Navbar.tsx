@@ -498,23 +498,36 @@ const Navbar: React.FC = () => {
                                             }}
                                         >
                                             <Dropdown
-                                                overlay={
-                                                    <Menu
-                                                        selectedKeys={[selectedDropdownKeys[link.label] || ""]}
-                                                        style={{ maxHeight: '300px', overflowY: 'auto' }}
-                                                    >
-                                                        {link.subItems
-                                                            .filter(sub => hasPermission(user?.role, sub.requiredPermission as any))
-                                                            .map((subItem, _subIndex) => (
-                                                                <Menu.Item
-                                                                    key={subItem.label}
-                                                                    onClick={() => handleDropdownSelect(link.label, subItem)}
-                                                                >
-                                                                    {subItem.label}
-                                                                </Menu.Item>
-                                                            ))}
-                                                    </Menu>
-                                                }
+                                                trigger={["hover", "click"]}
+                                                mouseEnterDelay={0.12}
+                                                mouseLeaveDelay={0.14}
+                                                placement="bottomLeft"
+                                                overlayClassName="nav-dropdown-overlay"
+                                                getPopupContainer={() => document.body}
+                                                menu={{
+                                                    selectedKeys: selectedDropdownKeys[link.label]
+                                                        ? [selectedDropdownKeys[link.label]]
+                                                        : [],
+                                                    items: link.subItems
+                                                        .filter((sub) =>
+                                                            hasPermission(
+                                                                user?.role,
+                                                                sub.requiredPermission as any
+                                                            )
+                                                        )
+                                                        .map((subItem) => ({
+                                                            key: subItem.label,
+                                                            label: subItem.label,
+                                                        })),
+                                                    onClick: ({ key }) => {
+                                                        const subItem = link.subItems?.find(
+                                                            (item) => item.label === key
+                                                        );
+                                                        if (subItem) {
+                                                            handleDropdownSelect(link.label, subItem);
+                                                        }
+                                                    },
+                                                }}
                                             >
                                                 <Button type="text">
                                                     {link.label} <DownOutlined />
@@ -543,6 +556,8 @@ const Navbar: React.FC = () => {
                         overlay={notificationMenu}
                         trigger={["click"]}
                         placement="bottomRight"
+                        overlayClassName="nav-dropdown-overlay nav-notification-overlay"
+                        getPopupContainer={() => document.body}
                     >
                         <span className="notification-icon-wrapper">
                             <Badge count={notifications.filter((n) => !n.isRead).length} size="small" offset={[-2, 4]}>
@@ -551,7 +566,13 @@ const Navbar: React.FC = () => {
                         </span>
                     </Dropdown>
                     {user ? (
-                        <Dropdown overlay={profileMenu}>
+                        <Dropdown
+                            overlay={profileMenu}
+                            trigger={["click"]}
+                            placement="bottomRight"
+                            overlayClassName="nav-dropdown-overlay nav-profile-overlay"
+                            getPopupContainer={() => document.body}
+                        >
                             <Button
                                 type="text"
                                 className="custom-dropdown-btn"
