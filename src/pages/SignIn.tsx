@@ -146,9 +146,9 @@ const authShowcase: Record<AuthMode, ShowcaseConfig> = {
             subtitle: "",
         },
         form: {
-            eyebrow: "Sign in",
+            eyebrow: "",
             title: "Welcome back",
-            description: "Access live execution signals and pick up exactly where your shift or review left off.",
+            description: "",
             statusLabel: "",
             statusValue: "",
             introTitle: "",
@@ -215,7 +215,7 @@ const authShowcase: Record<AuthMode, ShowcaseConfig> = {
             subtitle: "",
         },
         form: {
-            eyebrow: "Sign up",
+            eyebrow: "",
             title: "Create your workspace",
             description: "",
             statusLabel: "",
@@ -228,7 +228,7 @@ const authShowcase: Record<AuthMode, ShowcaseConfig> = {
         showcase: {
             badge: "",
             floatingBadge: "",
-            eyebrow: "Workspace preview",
+            eyebrow: "",
             title: "Give every project, team, and update a cleaner place to operate from day one.",
             description: "",
             metrics: [],
@@ -265,14 +265,15 @@ const authShowcase: Record<AuthMode, ShowcaseConfig> = {
                 headline: "A stronger first impression for new teams",
                 items: [
                     "Role-aware visibility that can scale from one project to a multi-site delivery portfolio.",
-                    "Audit-friendly records for decisions, approvals, and operational follow-through.",
+                    "Audit-friendly records for decisions, approvals, and operational follow-through, with clearer traceability across review cycles, ownership changes, and the actions taken after key milestones or exceptions.",
                     "Shared workspace structure for planners, delivery leads, commercial teams, and reviewers from the start.",
+                    "A clear operating baseline for timelines, risks, documents, and team accountability from the first day of setup.",
                 ],
             },
             highlight: {
                 label: "Expected uplift",
                 value: "1 source",
-                copy: "One shared operating layer for schedule, delivery, risk, and executive oversight instead of disconnected trackers. Teams enter with clearer ownership, fewer handoff gaps, and a stronger base for future project controls.",
+                copy: "One shared operating layer for schedule, delivery, risk, and executive oversight instead of disconnected trackers. Teams enter with clearer ownership, fewer handoff gaps, and a stronger base for future project controls. From the first setup cycle, the workspace creates a more consistent rhythm for updates, approvals, and cross-functional coordination, making it easier to scale operating discipline as projects and stakeholders grow.",
             },
         },
     },
