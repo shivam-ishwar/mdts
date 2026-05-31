@@ -1,4 +1,23 @@
 @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700&display=swap');
+:root {
+    --font-sans: var(--font-base);
+    --font-display: "Syne", var(--font-base);
+    --color-brand-400: var(--color-accent);
+    --color-brand-500: var(--color-primary);
+    --color-brand-600: var(--color-primary-hover);
+    --color-auth-950: #06110f;
+    --color-auth-900: #0a1715;
+    --color-auth-850: #10211d;
+    --color-auth-800: #142b25;
+    --color-auth-700: #1f3a32;
+    --color-auth-border: rgba(148, 163, 184, 0.18);
+    --color-auth-text: #f8fafc;
+    --color-auth-muted: #94a3b8;
+    --color-auth-soft: #cbd5e1;
+    --shadow-auth-card: 0 28px 80px rgba(2, 6, 23, 0.46);
+    --shadow-auth-glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 24px 70px rgba(16, 185, 129, 0.12);
+    --radius-auth: 28px;
+}
 
 * {
     font-family: var(--font-base) !important;
