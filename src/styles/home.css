@@ -13,61 +13,130 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  flex-shrink: 0;
+  overflow: visible;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 24px;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 10px 16px;
+  background: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .logo-and-text-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+}
+
+.logo-sections-cant {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 24px rgba(2, 6, 23, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.7);
 }
 
 .logo-image {
-  height: 42px;
+  height: 52px;
   width: auto;
 }
 
 .brand-text p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 14px;
   line-height: 1.25;
   font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: 0.2px;
+  color: var(--text-inverse);
   text-transform: uppercase;
   letter-spacing: 1px;
+  opacity: 0.95;
 }
 
 .tabs {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .tab-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 9px 12px;
-  border-radius: 999px;
-  color: var(--text-secondary);
+  justify-content: center;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-inverse);
   font-weight: 800;
-  font-size: 13.5px;
+  font-size: 14px;
   text-decoration: none;
-  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+  transition: color 0.16s ease, transform 0.16s ease, background-color 0.16s ease;
+  background: transparent;
+}
+
+.home-navbar .tab-link,
+.home-navbar .tab-link:hover,
+.home-navbar .tab-link:focus-visible,
+.home-navbar .tab-link:active {
+  text-decoration: none !important;
+}
+
+.tab-link .tab-items {
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-decoration: none !important;
 }
 
 .tab-link:hover {
-  background: rgba(15, 23, 42, 0.06);
-  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-accent);
   transform: translateY(-1px);
+}
+
+.tab-link::after {
+  content: "";
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--color-accent);
+  transition: width 0.2s ease, left 0.2s ease;
+}
+
+.tab-link:hover::after,
+.tab-link.active::after {
+  width: 100%;
+  left: 0;
+}
+
+.tab-link.active {
+  color: var(--text-inverse);
+}
+
+.tab-link--login {
+  min-width: 96px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-md);
+  background: transparent;
+  box-shadow: none;
+}
+
+.tab-link--login:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text-inverse);
+}
+
+.tab-link--login::after {
+  display: none;
 }
 
 .page-body {
@@ -460,6 +529,15 @@
     flex-direction: column;
   }
 
+  .logo-sections-cant {
+    width: 58px;
+    height: 58px;
+  }
+
+  .logo-image {
+    height: 46px;
+  }
+
   .tabs {
     gap: 8px;
   }
@@ -507,6 +585,11 @@
 
   .what-we-do-section {
     padding: 56px 16px;
+  }
+
+  .brand-text p {
+    font-size: 12px;
+    letter-spacing: 0.8px;
   }
 
   .cta-card {

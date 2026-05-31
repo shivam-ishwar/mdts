@@ -551,8 +551,10 @@ const Home = () => {
   const location = useLocation();
   const isHomeRoute = location.pathname === "/home";
 
-  const isActive = (path: string) =>
-    location.pathname === path || location.pathname.startsWith(path + "/");
+  const isActive = (path: string, exact = false) =>
+    exact
+      ? location.pathname === path
+      : location.pathname === path || location.pathname.startsWith(path + "/");
 
   return (
     <div className="page-containers">
@@ -575,7 +577,7 @@ const Home = () => {
           </div>
 
           <nav className="tabs" aria-label="Primary navigation">
-            <Link className={`tab-link ${isActive("/home") ? "active" : ""}`} to="/home">
+            <Link className={`tab-link ${isActive("/home", true) ? "active" : ""}`} to="/home">
               <Typography className="tab-items" variant="body1">Home</Typography>
             </Link>
 
@@ -600,7 +602,7 @@ const Home = () => {
               <Typography className="tab-items" variant="body1">Contacts</Typography>
             </Link>
 
-            <Link className={`tab-link ${isActive("/home/login") ? "active" : ""}`} to="/home/login">
+            <Link className={`tab-link tab-link--login ${isActive("/home/login") ? "active" : ""}`} to="/home/login">
               <Typography className="tab-items" variant="body1">Login</Typography>
             </Link>
           </nav>
