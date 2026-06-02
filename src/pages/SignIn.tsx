@@ -472,10 +472,7 @@ export default function SignInSignUp() {
             const message = "Authentication successful. Redirecting to your workspace.";
             setBanner({ tone: "success", message });
             notify.success("Login successful.");
-
-            window.setTimeout(() => {
-                navigate(isProfileCompleted(user) ? "/workspace-home" : "/profile");
-            }, 800);
+            navigate(isProfileCompleted(user) ? "/workspace-home" : "/profile", { replace: true });
         } catch (error) {
             console.error(error);
             const message = "Unable to sign you in right now. Please try again.";

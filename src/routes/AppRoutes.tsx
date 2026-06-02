@@ -1,12 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-    createBrowserRouter,
-    createRoutesFromElements,
-    Navigate,
-    Outlet,
-    Route,
-    RouterProvider,
-} from "react-router-dom";
+import { useEffect, useState } from "react";
+import { createBrowserRouter, createRoutesFromElements, Navigate, Route, RouterProvider } from "react-router-dom";
 import Home from "../pages/Home";
 import NotFound from "../pages/NotFound";
 import MainLayout from "../Layout/MainLayout";
@@ -48,31 +41,29 @@ import CommercialActivityPlanner from "../pages/ComercialActivityPlanner";
 import ManageRaci from "../pages/ManageRaci";
 import StandardizationLinks from "../pages/StandardizationLinks";
 import Dashboard from "../Components/Dashboard";
-import { userStore } from "../Utils/UserStore";
 import Notepad from "../pages/Notepad";
 import WorkspaceHome from "../pages/WorkspaceHome";
 import { UnsavedChangesProvider } from "../contexts/UnsavedChangesContext";
+import { userStore } from "../Utils/UserStore";
 
-const AppRoutes = () => {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+const hasStoredUser = () => {
+    const raw = localStorage.getItem("user");
+    if (!raw) return false;
+
+    try {
+        const parsed = JSON.parse(raw);
+        return !!parsed && typeof parsed === "object" && (parsed.id != null || !!parsed.email);
+    } catch {
+        return false;
+    }
+};
+
+const useStoredAuth = () => {
+    const [isAuthenticated, setIsAuthenticated] = useState(() => hasStoredUser());
 
     useEffect(() => {
-        const computeAuth = () => {
-            const raw = localStorage.getItem("user");
-            if (!raw) {
-                setIsAuthenticated(false);
-                return;
-            }
-            try {
-                const parsed = JSON.parse(raw);
-                const valid = !!parsed && typeof parsed === "object" && (parsed.id != null || !!parsed.email);
-                setIsAuthenticated(valid);
-            } catch {
-                setIsAuthenticated(false);
-            }
-        };
+        const computeAuth = () => setIsAuthenticated(hasStoredUser());
 
-        computeAuth();
         const unsubscribe = userStore.subscribe(computeAuth);
         window.addEventListener("storage", computeAuth);
 
@@ -82,330 +73,328 @@ const AppRoutes = () => {
         };
     }, []);
 
-    const router = useMemo(
-        () =>
-            createBrowserRouter(
-                createRoutesFromElements(
-                    <Route
-                        element={(
-                            <UnsavedChangesProvider>
-                                <Outlet />
-                            </UnsavedChangesProvider>
-                        )}
-                    >
-                        <Route
-                            path="/home"
-                            element={isAuthenticated ? <Navigate to="/workspace-home" replace /> : <Home />}
-                        >
-                            <Route index element={<Hero />} />
-                            <Route path="services" element={<Services />} />
-                            <Route path="pricing" element={<Pricing />} />
-                            <Route path="contacts" element={<Contact />} />
-                            <Route path="login" element={<SignInSignUp />} />
-                        </Route>
+    return isAuthenticated;
+};
 
-                        <Route
-                            path="/"
-                            element={
-                                isAuthenticated ? <Navigate to="/workspace-home" replace /> : <Navigate to="/home" replace />
-                            }
-                        />
+const HomeGate = () => {
+    const isAuthenticated = useStoredAuth();
+    return isAuthenticated ? <Navigate to="/workspace-home" replace /> : <Home />;
+};
 
-                        {/* Protected Routes with Layout */}
-                        <Route
-                            element={
-                                <ProtectedRoute>
-                                    <MainLayout />
-                                </ProtectedRoute>
-                            }
-                        >
-                            {/* General pages (no special permission, just auth) */}
-                            <Route path="/workspace-home" element={<WorkspaceHome />} />
-                            <Route path="/landing-page" element={<LandingPage />} />
-                            <Route path="/settings" element={<SettingsAndPrivacy />} />
-                            <Route path="/helps" element={<HelpAndSupport />} />
-                            <Route path="/not-found" element={<NotFound />} />
-                            <Route path="/profile" element={<Profile />} />
+const RootGate = () => {
+    const isAuthenticated = useStoredAuth();
+    return <Navigate to={isAuthenticated ? "/workspace-home" : "/home"} replace />;
+};
 
-                            {/* Role-based protected pages */}
-                            <Route
-                                path="/create/register-new-project"
-                                element={
-                                    <ProtectedRoute action="CREATE_PROJECT">
-                                        <RegisterNewProject />
-                                    </ProtectedRoute>
-                                }
-                            />
+const router = createBrowserRouter(
+    createRoutesFromElements(
+        <Route>
+            <Route path="/home" element={<HomeGate />}>
+                <Route index element={<Hero />} />
+                <Route path="services" element={<Services />} />
+                <Route path="pricing" element={<Pricing />} />
+                <Route path="contacts" element={<Contact />} />
+                <Route path="login" element={<SignInSignUp />} />
+            </Route>
 
-                            <Route
-                                path="/employee-registration"
-                                element={
-                                    <ProtectedRoute action="ADD_TEAM_MEMBER">
-                                        <EmployeeRegistration />
-                                    </ProtectedRoute>
-                                }
-                            />
+            <Route path="/" element={<RootGate />} />
 
-                            <Route
-                                path="/create/status-update"
-                                element={
-                                    <ProtectedRoute action="UPDATE_STATUS">
-                                        <StatusUpdate />
-                                    </ProtectedRoute>
-                                }
-                            />
+            {/* Protected Routes with Layout */}
+            <Route
+                element={
+                    <UnsavedChangesProvider>
+                        <ProtectedRoute>
+                            <MainLayout />
+                        </ProtectedRoute>
+                    </UnsavedChangesProvider>
+                }
+            >
+                {/* General pages (no special permission, just auth) */}
+                <Route path="/workspace-home" element={<WorkspaceHome />} />
+                <Route path="/landing-page" element={<LandingPage />} />
+                <Route path="/settings" element={<SettingsAndPrivacy />} />
+                <Route path="/helps" element={<HelpAndSupport />} />
+                <Route path="/not-found" element={<NotFound />} />
+                <Route path="/profile" element={<Profile />} />
 
-                            <Route
-                                path="/create/standardization-links"
-                                element={
-                                    <ProtectedRoute action="UPDATE_STATUS">
-                                        <StandardizationLinks />
-                                    </ProtectedRoute>
-                                }
-                            />
+                {/* Role-based protected pages */}
+                <Route
+                    path="/create/register-new-project"
+                    element={
+                        <ProtectedRoute action="CREATE_PROJECT">
+                            <RegisterNewProject />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/create/module-library"
-                                element={
-                                    <ProtectedRoute action="CREATE_MODULE">
-                                        <ModuleLibrary />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/employee-registration"
+                    element={
+                        <ProtectedRoute action="ADD_TEAM_MEMBER">
+                            <EmployeeRegistration />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/create/mdts-modules"
-                                element={
-                                    <ProtectedRoute action="CREATE_MODULE">
-                                        <MDTSModules />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/status-update"
+                    element={
+                        <ProtectedRoute action="UPDATE_STATUS">
+                            <StatusUpdate />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/create/project-list"
-                                element={
-                                    <ProtectedRoute action="VIEW_PROJECT_LIST">
-                                        <ProjectList />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/standardization-links"
+                    element={
+                        <ProtectedRoute action="UPDATE_STATUS">
+                            <StandardizationLinks />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/update-project/:id"
-                                element={
-                                    <ProtectedRoute>
-                                        <RegisterNewProject />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/module-library"
+                    element={
+                        <ProtectedRoute action="CREATE_MODULE">
+                            <ModuleLibrary />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/knowledge-center"
-                                element={
-                                    <ProtectedRoute>
-                                        <KnowledgeCenter />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/mdts-modules"
+                    element={
+                        <ProtectedRoute action="CREATE_MODULE">
+                            <MDTSModules />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/create/non-working-days"
-                                element={
-                                    <ProtectedRoute action="SET_GLOBAL_HOLIDAY">
-                                        <HolidayCalender />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/project-list"
+                    element={
+                        <ProtectedRoute action="VIEW_PROJECT_LIST">
+                            <ProjectList />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/document"
-                        element={
-                            <ProtectedRoute action="ADD_GLOBAL_DOCUMENT">
-                                <CreateDocument />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/update-project/:id"
+                    element={
+                        <ProtectedRoute>
+                            <RegisterNewProject />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/view-document"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <ViewDocumentPage />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/knowledge-center"
+                    element={
+                        <ProtectedRoute>
+                            <KnowledgeCenter />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/notificationlibrary"
-                        element={
-                            <ProtectedRoute action="SET_NOTIFICATIONS">
-                                <NotificationLibrary />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/non-working-days"
+                    element={
+                        <ProtectedRoute action="SET_GLOBAL_HOLIDAY">
+                            <HolidayCalender />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/notepad"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <Notepad />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/document"
+                    element={
+                        <ProtectedRoute action="ADD_GLOBAL_DOCUMENT">
+                            <CreateDocument />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/timeline-builder"
-                        element={
-                            <ProtectedRoute action="BUILD_TIMEBUILDER">
-                                <TimelineBuilder />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/view-document"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <ViewDocumentPage />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/data-master"
-                        element={
-                            <ProtectedRoute action="CREATE_MODULE">
-                                <DataMaster />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/notificationlibrary"
+                    element={
+                        <ProtectedRoute action="SET_NOTIFICATIONS">
+                            <NotificationLibrary />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/about"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <About />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/notepad"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <Notepad />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/project"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <Projects />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/timeline-builder"
+                    element={
+                        <ProtectedRoute action="BUILD_TIMEBUILDER">
+                            <TimelineBuilder />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/dashboard"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <Dashboard />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/data-master"
+                    element={
+                        <ProtectedRoute action="CREATE_MODULE">
+                            <DataMaster />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/modules"
-                        element={
-                            <ProtectedRoute action="CREATE_MODULE">
-                                <Module />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/about"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <About />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/document"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <Document />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/project"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <Projects />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/budgets"
-                        element={
-                            <ProtectedRoute action="VIEW_NAVBAR_MENUS">
-                                <ActivityBudget />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/dashboard"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <Dashboard />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/notification"
-                        element={
-                            <ProtectedRoute action="SET_NOTIFICATIONS">
-                                <CreateNotification />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/modules"
+                    element={
+                        <ProtectedRoute action="CREATE_MODULE">
+                            <Module />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/delay-cost-calculator"
-                        element={
-                            <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
-                                <DelayCostCalculator />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/document"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <Document />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/dpr-cost-builder"
-                        element={
-                            <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
-                                <DPRCostBuilder />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/budgets"
+                    element={
+                        <ProtectedRoute action="VIEW_NAVBAR_MENUS">
+                            <ActivityBudget />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/racisearch"
-                        element={
-                            <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
-                                <ManageRaci />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/notification"
+                    element={
+                        <ProtectedRoute action="SET_NOTIFICATIONS">
+                            <CreateNotification />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/activitycost"
-                        element={
-                            <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
-                                <ActivityCost />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/delay-cost-calculator"
+                    element={
+                        <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
+                            <DelayCostCalculator />
+                        </ProtectedRoute>
+                    }
+                />
 
-                    <Route
-                        path="/create/commercialActivityplanner"
-                        element={
-                            <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
-                                <CommercialActivityPlanner />
-                            </ProtectedRoute>
-                        }
-                    />
+                <Route
+                    path="/create/dpr-cost-builder"
+                    element={
+                        <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
+                            <DPRCostBuilder />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/create/raci-alert-notification"
-                                element={
-                                    <ProtectedRoute action="ASSIGN_RASI">
-                                        <ManageUser />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/racisearch"
+                    element={
+                        <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
+                            <ManageRaci />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route
-                                path="/view-user"
-                                element={
-                                    <ProtectedRoute action="VIEW_TEAM_MEMBERS">
-                                        <ViewUser />
-                                    </ProtectedRoute>
-                                }
-                            />
+                <Route
+                    path="/create/activitycost"
+                    element={
+                        <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
+                            <ActivityCost />
+                        </ProtectedRoute>
+                    }
+                />
 
-                            <Route path="*" element={<Navigate to="/not-found" replace />} />
-                        </Route>
-                    </Route>
-                ),
-            ),
-        [isAuthenticated],
-    );
+                <Route
+                    path="/create/commercialActivityplanner"
+                    element={
+                        <ProtectedRoute action="ADD_COST_IN_ACTIVITY">
+                            <CommercialActivityPlanner />
+                        </ProtectedRoute>
+                    }
+                />
 
+                <Route
+                    path="/create/raci-alert-notification"
+                    element={
+                        <ProtectedRoute action="ASSIGN_RASI">
+                            <ManageUser />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/view-user"
+                    element={
+                        <ProtectedRoute action="VIEW_TEAM_MEMBERS">
+                            <ViewUser />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route path="*" element={<Navigate to="/not-found" replace />} />
+            </Route>
+        </Route>
+    )
+);
+
+const AppRoutes = () => {
     return <RouterProvider router={router} />;
 };
 

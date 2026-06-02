@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Input, DatePicker, Select, Table, Button, Checkbox, Steps, Modal, Result, Typography, Form, Row, Col, Tooltip } from "antd";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import "../styles/time-builder.css";
@@ -15,6 +15,7 @@ import { ToastContainer } from "react-toastify";
 import { notify } from "../Utils/ToastNotify.tsx";
 import { Box } from "@mui/material";
 import { v4 as uuidv4 } from 'uuid';
+import { useUnsavedChanges } from "../contexts/UnsavedChangesContext";
 import {
   formatPrerequisiteCodes,
   getInvalidPrerequisiteCodes,
@@ -71,6 +72,12 @@ interface Column {
 
 const TimeBuilder = () => {
   const navigate = useNavigate();
+  const {
+    markClean,
+    registerDiscardHandler,
+    registerSaveHandler,
+    setHasUnsavedChanges,
+  } = useUnsavedChanges();
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [_selectedActivities, setSelectedActivities] = useState<string[]>([]);
   const [allProjects, setAllProjects] = useState<any[]>([]);
@@ -149,6 +156,77 @@ const TimeBuilder = () => {
   const [userOptions, setUserOptions] = useState<any>([]);
   const queryParams = new URLSearchParams(location.search);
   const projectIdForTimeline = queryParams.get("projectId");
+  const unsavedBaselineRef = useRef("");
+  const hasCapturedUnsavedBaselineRef = useRef(false);
+  const [unsavedTrackingReady, setUnsavedTrackingReady] = useState(false);
+
+  const buildUnsavedSnapshot = useCallback(() => JSON.stringify({
+    currentStep,
+    selectedProjectId,
+    selectedProjectName,
+    selectedProjectMineType,
+    selectedGroupName,
+    selectedLibraryId,
+    selectedItems: (selectedItems || []).map((item: any) => ({
+      parentModuleCode: item?.parentModuleCode || "",
+      status: item?.status || "",
+      name: item?.moduleName || "",
+    })),
+    sequencedModules: (sequencedModules || []).map((module: any) => ({
+      parentModuleCode: module?.parentModuleCode || "",
+      moduleName: module?.moduleName || "",
+      activities: (module?.activities || []).map((activity: any) => ({
+        code: activity?.code || "",
+        activityName: activity?.activityName || "",
+        duration: activity?.duration ?? "",
+        slack: activity?.slack ?? "",
+        start: activity?.start ?? "",
+        end: activity?.end ?? "",
+        prerequisite: formatPrerequisiteCodes(activity),
+        activityStatus: activity?.activityStatus ?? "",
+        fin_status: activity?.fin_status ?? "",
+      })),
+    })),
+    selectedHolidayKeys: Object.entries(selected)
+      .filter(([, value]) => Boolean(value))
+      .map(([key]) => key)
+      .sort(),
+    holidayImpacts: (finalHolidays || []).map((holiday: any) => ({
+      key: holiday?.key || "",
+      holiday: holiday?.holiday || "",
+      impact: holiday?.impact || {},
+      from: holiday?.from || "",
+      to: holiday?.to || "",
+    })),
+    isSaturdayWorking,
+    isSundayWorking,
+    isUpdateMode,
+    isReplanMode,
+    selectedTimelineId,
+  }), [
+    currentStep,
+    finalHolidays,
+    isReplanMode,
+    isSaturdayWorking,
+    isSundayWorking,
+    isUpdateMode,
+    selected,
+    selectedGroupName,
+    selectedItems,
+    selectedLibraryId,
+    selectedProjectId,
+    selectedProjectMineType,
+    selectedProjectName,
+    selectedTimelineId,
+    sequencedModules,
+  ]);
+
+  const captureUnsavedBaseline = useCallback(() => {
+    unsavedBaselineRef.current = buildUnsavedSnapshot();
+    hasCapturedUnsavedBaselineRef.current = true;
+    setUnsavedTrackingReady(true);
+    markClean();
+  }, [buildUnsavedSnapshot, markClean]);
 
   const getAllowedPrerequisiteOptions = (activityCode: string, activities: any[], context?: any) => {
     const candidateCodes = activities.map((activity: any) => activity.code);
@@ -215,6 +293,20 @@ const TimeBuilder = () => {
     loadUser();
   }, []);
 
+  useEffect(() => {
+    registerDiscardHandler(async () => undefined);
+    registerSaveHandler(async () => {
+      notify.warning("Timeline Builder changes can only be saved from the final review step.");
+      return false;
+    });
+
+    return () => {
+      registerDiscardHandler(null);
+      registerSaveHandler(null);
+      setHasUnsavedChanges(false);
+    };
+  }, [registerDiscardHandler, registerSaveHandler, setHasUnsavedChanges]);
+
   const loadUser = async () => {
     const user = await getCurrentUser();
     if (user) {
@@ -266,10 +358,11 @@ const TimeBuilder = () => {
 
 
       setIsMenualTimeline(true);
+      window.setTimeout(captureUnsavedBaseline, 0);
     };
 
     fetchData();
-  }, [currentUser, location.state]);
+  }, [captureUnsavedBaseline, currentUser, location.state]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -285,6 +378,11 @@ const TimeBuilder = () => {
     const recalculated = recalculateTimeline(sequencedModules);
     commitTimelineState(recalculated);
   }, [isSaturdayWorking, isSundayWorking, finalHolidays]);
+
+  useEffect(() => {
+    if (!unsavedTrackingReady || !hasCapturedUnsavedBaselineRef.current) return;
+    setHasUnsavedChanges(buildUnsavedSnapshot() !== unsavedBaselineRef.current);
+  }, [buildUnsavedSnapshot, setHasUnsavedChanges, unsavedTrackingReady]);
 
   const fetchHolidays = async () => {
     try {
@@ -446,6 +544,7 @@ const TimeBuilder = () => {
 
         if (!Array.isArray(frestTimelineProject) || frestTimelineProject.length == 0) {
           setAllProjects([]);
+          window.setTimeout(captureUnsavedBaseline, 0);
           return;
         }
 
@@ -502,8 +601,11 @@ const TimeBuilder = () => {
             }
           }
         }
+
+        window.setTimeout(captureUnsavedBaseline, 0);
       } catch (error) {
         console.error("An unexpected error occurred while fetching projects:", error);
+        window.setTimeout(captureUnsavedBaseline, 0);
       }
     }
   };
@@ -1191,6 +1293,7 @@ const TimeBuilder = () => {
       notify.success(isUpdateMode ? "Project timeline updated successfully!" : "Project timeline saved successfully!");
 
       localStorage.setItem("selectedProjectId", selectedProjectId);
+      captureUnsavedBaseline();
       resetProjectState();
     } catch (error) {
       console.error("Error saving project timeline:", error);
@@ -1877,6 +1980,7 @@ const TimeBuilder = () => {
     setIsReplanMode(false);
     setSelectedProjectId(null);
     setIsMenualTimeline(false);
+    captureUnsavedBaseline();
     defaultSetup();
     setTimeout(() => navigate(".", { replace: true }), 0);
   };

@@ -32,6 +32,31 @@ const EDITABLE_SELECTOR = [
   "[contenteditable='true']",
 ].join(", ");
 
+const INTERACTIVE_SELECTOR = [
+  ".ant-picker-input input",
+  ".ant-select-selection-item",
+  ".ant-select-selection-placeholder",
+  ".ant-checkbox-input",
+  ".ant-radio-input",
+  ".ant-switch",
+  ".ant-steps-item",
+  "[data-row-key]",
+  ".ant-table-row",
+].join(", ");
+
+const ACTION_SELECTOR = [
+  EDITABLE_SELECTOR,
+  "button",
+  "a[href]",
+  ".ant-btn",
+  "[role='button']",
+  ".ant-select",
+  ".ant-picker",
+  ".ant-switch",
+  ".ant-checkbox-wrapper",
+  ".ant-radio-wrapper",
+].join(", ");
+
 const SAVE_KEYWORDS = ["save", "update", "create", "submit", "add", "apply", "done"];
 
 const normalize = (value: string | null | undefined) => (value || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -76,13 +101,38 @@ const readElementValue = (element: Element) => {
   return (element as HTMLElement).innerText || (element as HTMLElement).textContent || "";
 };
 
-const createSnapshot = () => {
-  const items = Array.from(document.querySelectorAll(EDITABLE_SELECTOR));
+const readInteractiveValue = (element: Element) => {
+  const htmlElement = element as HTMLElement;
 
-  return items
+  if (element instanceof HTMLInputElement) {
+    if (element.type === "checkbox" || element.type === "radio") {
+      return element.checked ? "checked" : "unchecked";
+    }
+    return element.value;
+  }
+
+  if (htmlElement.classList.contains("ant-switch")) {
+    return htmlElement.getAttribute("aria-checked") || "false";
+  }
+
+  return normalize(htmlElement.innerText || htmlElement.textContent || "");
+};
+
+const createSnapshot = () => {
+  const editableItems = Array.from(document.querySelectorAll(EDITABLE_SELECTOR));
+  const interactiveItems = Array.from(document.querySelectorAll(INTERACTIVE_SELECTOR));
+
+  const editableSnapshot = editableItems
     .filter((element) => element instanceof HTMLElement && isElementVisible(element))
     .map((element, index) => `${getElementKey(element, index)}=${readElementValue(element)}`)
     .join("||");
+
+  const interactiveSnapshot = interactiveItems
+    .filter((element) => element instanceof HTMLElement && isElementVisible(element))
+    .map((element, index) => `${getElementKey(element, index)}=${readInteractiveValue(element)}`)
+    .join("||");
+
+  return `${editableSnapshot}##${interactiveSnapshot}`;
 };
 
 const hasValidationErrors = () =>
@@ -165,12 +215,35 @@ export const UnsavedChangesProvider = ({ children }: PropsWithChildren) => {
       syncDirtyState();
     };
 
+    const handlePotentialAction = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !target.closest(ACTION_SELECTOR)) return;
+      syncDirtyState();
+    };
+
+    const mutationObserver = new MutationObserver(() => {
+      syncDirtyState();
+    });
+
+    mutationObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["aria-checked", "aria-selected", "value", "class"],
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
     document.addEventListener("input", handlePotentialDirtyChange, true);
     document.addEventListener("change", handlePotentialDirtyChange, true);
+    document.addEventListener("click", handlePotentialAction, true);
+    document.addEventListener("keyup", handlePotentialAction, true);
 
     return () => {
+      mutationObserver.disconnect();
       document.removeEventListener("input", handlePotentialDirtyChange, true);
       document.removeEventListener("change", handlePotentialDirtyChange, true);
+      document.removeEventListener("click", handlePotentialAction, true);
+      document.removeEventListener("keyup", handlePotentialAction, true);
       if (syncFrameRef.current != null) {
         window.cancelAnimationFrame(syncFrameRef.current);
       }
