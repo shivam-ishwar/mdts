@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { RightOutlined } from "@ant-design/icons";
 import { Select } from "antd";
-import { timelineHierarchyMock } from "../config/timelineHierarchyMock";
 
 export type TimelineStatusTone = "completed" | "inprogress" | "yettostart";
 
@@ -208,7 +207,7 @@ function HierarchyColumn({
 }
 
 const TimelineTreeView = ({ projects, prefersReducedMotion }: TimelineTreeViewProps) => {
-  const sourceProjects = projects && projects.length ? projects : timelineHierarchyMock;
+  const sourceProjects = projects ?? [];
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<string | null>(null);
